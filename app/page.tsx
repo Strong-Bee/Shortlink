@@ -44,14 +44,14 @@ export default function AdminPage() {
     <div className="bg-slate-900 text-white min-h-screen flex items-center justify-center p-4">
       <div className="max-w-md w-full p-8 bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl">
         <h1 className="text-2xl font-bold mb-6 text-blue-400 text-center uppercase tracking-tighter">
-          LITEURL GENERATOR
+          SHORTLINK GENERATOR
         </h1>
         <div className="space-y-4">
           <input
             type="text"
             value={longUrl}
             onChange={(e) => setLongUrl(e.target.value)}
-            placeholder="https://youtube.com/..."
+            placeholder="https://url.com/..."
             className="w-full p-3 rounded bg-slate-900 border border-slate-700 focus:border-blue-500 outline-none"
           />
           <button
