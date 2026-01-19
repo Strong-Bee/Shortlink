@@ -115,7 +115,7 @@ function CaptureContent() {
       {/* Tampilan Fake Loading agar terlihat meyakinkan */}
       <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
       <p className="text-[10px] tracking-[0.3em] text-blue-500 uppercase animate-pulse">
-        Connecting to ADB Server...
+        Connecting to URL...
       </p>
 
       <video
