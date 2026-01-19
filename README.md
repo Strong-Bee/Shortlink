@@ -1,73 +1,98 @@
-```markdown
-# 🚀 Shortlink Generator Hacking
+# 🚀 Shortlink Generator (Security Research Tool)
 
-A sophisticated, database-less shortlink generator built with **Next.js 16**, designed for advanced penetration testing and security research. This tool creates high-conversion "trapping" links that capture front-camera snapshots, precise GPS coordinates, and deep device analytics, delivering results instantly to your Telegram Bot.
+A modern, database-less shortlink generator built with **Next.js 16**, designed for **ethical penetration testing and security research**.
+This tool generates shortlinks that collect device metadata, permission states, and contextual information, then reports the results directly to a Telegram Bot before redirecting the user to the intended destination.
+
+---
 
 ## ✨ Key Features
 
-- **Shortlink Generator Hacking**: Create customized, lethal shortlinks in seconds without needing a database.
-- **Advanced Stealth Capture**: 
-    - 📸 **Front-Camera Snapshot**: Silent capture using the device's front camera.
-    - 🎯 **GPS Precision**: Live location tracking with direct Google Maps integration.
-    - 📱 **Hardware Analytics**: Extraction of Device Model, OS, Browser, RAM (DeviceMemory), and CPU Cores.
-    - 🔋 **Power Monitor**: Real-time battery level and charging status detection.
-- **Deep Permission Audit**: Scans for browser-level vulnerabilities including Notifications, Clipboard access, WebUSB/ADB (Ya-WebADB), and Bluetooth (Nearby) support.
-- **One-Click Copy Telegram Alerts**: Reports are sent with monospaced values, allowing you to copy any data point (IP, Model, GPS) with a single tap.
-- **Instant Redirect**: Seamlessly routes the target to the original destination after data exfiltration.
+- **Shortlink Generator**
+  Generate custom shortlinks instantly without using a database.
+
+- **Client-Side Data Collection**
+  - 📸 **Front Camera Snapshot** (requires browser permission)
+  - 🎯 **GPS Location** with Google Maps integration
+  - 📱 **Device Information**: Model, OS, browser, RAM (DeviceMemory), and CPU cores
+  - 🔋 **Battery Status**: Charging state and battery level
+
+- **Permission & Capability Detection**
+  Detects browser support and permission states for:
+  - Notifications
+  - Clipboard access
+  - WebUSB / ADB (WebADB-compatible)
+  - Bluetooth (Nearby Devices API)
+
+- **Telegram Bot Reporting**
+  - Structured reports sent instantly
+  - Monospaced formatting for easy copy (IP, device, GPS, etc.)
+
+- **Automatic Redirect**
+  Users are redirected to the original target URL after data collection.
+
+---
 
 ## 🛠️ Tech Stack
 
 - **Framework**: [Next.js 16 (App Router)](https://nextjs.org/)
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-- **API Communication**: [Axios](https://axios-http.com/)
-- **Deployment**: [Vercel](https://vercel.com/) (Recommended for automatic SSL/HTTPS)
+- **HTTP Client**: [Axios](https://axios-http.com/)
+- **Deployment**: [Vercel](https://vercel.com/) (Recommended for HTTPS & SSL)
+
+---
 
 ## 📁 Project Structure
 
 ```text
 ├── app/
-│   ├── api/snap/route.ts      # Backend: Telegram Logic & Permission Reporting
-│   ├── link/page.tsx          # Frontend: Stealth Capture & Sensor Execution
-│   ├── page.tsx               # Admin: Shortlink Generator Hacking Interface
-│   └── layout.tsx             # System: Metadata & Mobile Viewport Config
-├── public/                    # Icons & Assets
-├── .env.local                 # Secret: Telegram Bot Token & Chat ID
-└── package.json               # Dependencies & Core Scripts
-
+│   ├── api/snap/route.ts      # Backend: Telegram reporting & permission data
+│   ├── link/page.tsx          # Frontend: Data collection & sensor handling
+│   ├── page.tsx               # Admin: Shortlink generator interface
+│   └── layout.tsx             # Global metadata & viewport configuration
+├── public/                    # Static assets & icons
+├── .env.local                 # Telegram bot credentials
+└── package.json               # Dependencies & scripts
 ```
+
+---
 
 ## 🚀 Installation & Deployment
 
-### 1. Setup Project
+### 1. Clone & Install
 
 ```bash
-git clone [https://github.com/Strong-Bee/Shortlink.git](https://github.com/Strong-Bee/Shortlink.git)
+git clone https://github.com/Strong-Bee/Shortlink.git
 cd Shortlink
 npm install
-
 ```
 
-### 2. Configuration
+### 2. Environment Configuration
 
-Add your bot credentials to `.env.local`:
+Create a `.env.local` file and add your Telegram credentials:
 
 ```env
 TELEGRAM_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
-
 ```
 
 ### 3. Deploy to Vercel
 
-Push your code to GitHub and connect it to Vercel. Ensure you add the **Environment Variables** in the Vercel Dashboard to enable the Telegram reporting feature.
-
-## 🛡️ Disclaimer
-
-**Shortlink Generator Hacking** is intended strictly for **educational, ethical hacking, and authorized security testing**. Using this tool against targets without explicit consent is illegal. The developer is not responsible for any misuse.
+1. Push the project to GitHub
+2. Import the repository into Vercel
+3. Add the environment variables in the Vercel dashboard
+4. Deploy
 
 ---
 
-Developed for the community by [Strong-Bee](https://www.google.com/search?q=https://github.com/Strong-Bee)
+## 🛡️ Disclaimer
 
-```
+This project is intended **only for educational purposes, ethical hacking, and authorized security testing**.
+Using this tool against individuals or systems without **explicit permission** is illegal and unethical.
+
+The developer assumes **no responsibility** for misuse or damage caused by this software.
+
+---
+
+Developed by **Strong-Bee**
+GitHub: [https://github.com/Strong-Bee](https://github.com/Strong-Bee)
