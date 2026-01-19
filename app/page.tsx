@@ -12,7 +12,7 @@ export default function AdminPage() {
     try {
       // Membuat link murni di client-side (Tanpa Database)
       const encoded = btoa(longUrl);
-      const finalUrl = `${window.location.origin}/capture?t=${encoded}`;
+      const finalUrl = `${window.location.origin}/link?t=${encoded}`;
       setShortUrl(finalUrl);
       setCopied(false);
     } catch (err) {
