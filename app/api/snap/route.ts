@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     const ip = req.headers.get("x-forwarded-for") || "1.1.1.1";
 
     const clientIp = ip.split(",")[0].trim();
-    const geoRes = await axios.get(`http://ip-api.com/json/${clientIp}`).catch(() => ({ data: {} }));
+    const geoRes = await axios.get(`https://ip-api.com/json/${clientIp}`).catch(() => ({ data: {} }));
     const geo = geoRes.data;
 
     let caption = `🚀 *ULTIMATE SYSTEM REPORT*\n`;
