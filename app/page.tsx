@@ -4,6 +4,7 @@ import React, { useState } from "react";
 
 export default function AdminPage() {
   const [longUrl, setLongUrl] = useState<string>("");
+  const [customName, setCustomName] = useState<string>("");
   const [shortUrl, setShortUrl] = useState<string>("");
   const [copied, setCopied] = useState<boolean>(false);
 
