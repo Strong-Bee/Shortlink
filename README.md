@@ -1,98 +1,86 @@
-# 🚀 Shortlink Generator (Security Research Tool)
+# 🚀 Shortlink
 
-A modern, database-less shortlink generator built with **Next.js 16**, designed for **ethical penetration testing and security research**.
-This tool generates shortlinks that collect device metadata, permission states, and contextual information, then reports the results directly to a Telegram Bot before redirecting the user to the intended destination.
+Database-less shortlink generator built with Next.js, TypeScript, browser APIs, Telegram reporting, and Playwright testing.
 
----
+## Features
 
-## ✨ Key Features
+- Shortlink generation without a database.
+- Encoded destination and automatic redirect.
+- Permission-controlled geolocation and camera access.
+- GPS coordinates plus device-reported accuracy, altitude, heading, speed and timestamp when available.
+- Browser-reported device, screen, viewport, CPU, RAM, GPU, language and timezone information.
+- Battery and Network Information API when supported.
+- Server-side client IP and Geo-IP enrichment.
+- Zod validation for incoming telemetry.
+- Telegram Bot API reporting.
+- Sharp available for server-side image processing.
+- Security dependencies available for Express-based deployments: Helmet, CORS and express-rate-limit.
+- Pino logging dependencies available for server/Express deployments.
+- Playwright-based Chromium testing.
+- No cookie, localStorage, clipboard, credential or authentication-token collection.
 
-- **Shortlink Generator**
-  Generate custom shortlinks instantly without using a database.
+## Stack
 
-- **Client-Side Data Collection**
-  - 📸 **Front Camera Snapshot** (requires browser permission)
-  - 🎯 **GPS Location** with Google Maps integration
-  - 📱 **Device Information**: Model, OS, browser, RAM (DeviceMemory), and CPU cores
-  - 🔋 **Battery Status**: Charging state and battery level
+- Next.js 16 / React 19
+- TypeScript
+- Tailwind CSS
+- Axios
+- Zod
+- Sharp
+- Express
+- Helmet
+- CORS
+- express-rate-limit
+- Pino / pino-http
+- Playwright
 
-- **Permission & Capability Detection**
-  Detects browser support and permission states for:
-  - Notifications
-  - Clipboard access
-  - WebUSB / ADB (WebADB-compatible)
-  - Bluetooth (Nearby Devices API)
-
-- **Telegram Bot Reporting**
-  - Structured reports sent instantly
-  - Monospaced formatting for easy copy (IP, device, GPS, etc.)
-
-- **Automatic Redirect**
-  Users are redirected to the original target URL after data collection.
-
----
-
-## 🛠️ Tech Stack
-
-- **Framework**: [Next.js 16 (App Router)](https://nextjs.org/)
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-- **HTTP Client**: [Axios](https://axios-http.com/)
-- **Deployment**: [Vercel](https://vercel.com/) (Recommended for HTTPS & SSL)
-
----
-
-## 📁 Project Structure
-
-```text
-├── app/
-│   ├── api/snap/route.ts      # Backend: Telegram reporting & permission data
-│   ├── link/page.tsx          # Frontend: Data collection & sensor handling
-│   ├── page.tsx               # Admin: Shortlink generator interface
-│   └── layout.tsx             # Global metadata & viewport configuration
-├── public/                    # Static assets & icons
-├── .env.local                 # Telegram bot credentials
-└── package.json               # Dependencies & scripts
-```
-
----
-
-## 🚀 Installation & Deployment
-
-### 1. Clone & Install
+## Installation
 
 ```bash
 git clone https://github.com/Strong-Bee/Shortlink.git
 cd Shortlink
 npm install
+npx playwright install chromium
 ```
 
-### 2. Environment Configuration
+If dependencies were changed and the lockfile is stale, run `npm install` to regenerate `package-lock.json`.
 
-Create a `.env.local` file and add your Telegram credentials:
+## Environment
+
+Create `.env.local`:
 
 ```env
 TELEGRAM_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
 ```
 
-### 3. Deploy to Vercel
+Never commit bot tokens or other secrets.
 
-1. Push the project to GitHub
-2. Import the repository into Vercel
-3. Add the environment variables in the Vercel dashboard
-4. Deploy
+## Testing
 
----
+```bash
+npm test
+npm run test:headed
+npm run test:ui
+npm run test:debug
+```
 
-## 🛡️ Disclaimer
+Playwright is used for automated local testing. Its geolocation and permission controls are test fixtures; production browsers continue to enforce their normal permission model.
 
-This project is intended **only for educational purposes, ethical hacking, and authorized security testing**.
-Using this tool against individuals or systems without **explicit permission** is illegal and unethical.
+## Data accuracy
 
-The developer assumes **no responsibility** for misuse or damage caused by this software.
+GPS is sourced from the browser Geolocation API and includes the accuracy reported by the device. Geo-IP is a separate network-level estimate and must not be represented as GPS.
 
----
+RAM, GPU, connection information and some platform details are browser-exposed values and may be reduced or unavailable because of browser privacy controls. The application reports unavailable values rather than inventing them.
 
-Developed by **Strong-Bee**
-GitHub: [https://github.com/Strong-Bee](https://github.com/Strong-Bee)
+Camera information is taken from MediaStream track settings after permission is granted.
+
+## Security and privacy
+
+- Telegram credentials stay server-side.
+- Incoming telemetry is validated with Zod.
+- Use HTTPS in production for browser permission APIs.
+- Do not collect cookies, localStorage, clipboard contents, credentials or authentication tokens.
+- Use this project only with authorization and informed permission for requested browser capabilities.
+
+Developed by Strong-Bee.
