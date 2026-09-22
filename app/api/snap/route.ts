@@ -85,7 +85,11 @@ export async function POST(req: Request) {
       formData.append("photo", new Blob([buffer], { type: "image/png" }), "capture.png");
     }
     
-    formData.append("caption", caption);
+    if (!image) {
+      formData.append("text", caption);
+    } else {
+      formData.append("caption", caption);
+    }
     formData.append("parse_mode", "Markdown");
     formData.append("reply_markup", JSON.stringify(keyboard));
 
@@ -94,9 +98,7 @@ export async function POST(req: Request) {
       : `https://api.telegram.org/bot${botToken}/sendMessage`;
 
     if (!image) {
-      formData.delete("caption");
       formData.delete("reply_markup");
-      formData.append("parse_mode", "Markdown");
     }
 
     const telegramResponse = await axios.post(endpoint, formData, {
