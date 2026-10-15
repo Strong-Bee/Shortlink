@@ -117,12 +117,12 @@ export default function CapturePage() {
       setError("Pilih setidaknya satu data: foto, lokasi, atau audio.");
       return;
     }
-    if (photo && photo.size > 5 * 1024 * 1024) {
-      setError("Ukuran foto maksimal 5 MB.");
+    if (photo && photo.size > 3 * 1024 * 1024) {
+      setError("Ukuran foto maksimal 3 MB.");
       return;
     }
-    if (audio && audio.size > 15 * 1024 * 1024) {
-      setError("Ukuran audio maksimal 15 MB.");
+    if (audio && audio.size > 3 * 1024 * 1024) {
+      setError("Ukuran audio maksimal 3 MB.");
       return;
     }
 
