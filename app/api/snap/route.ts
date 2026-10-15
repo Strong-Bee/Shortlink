@@ -134,14 +134,14 @@ export async function POST(req: Request) {
   const cookieConsent = readCookieConsent(req);
   const headers = req.headers;
   const forwardedFor = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const ip = forwardedFor || headers.get("x-real-ip") || "Unavailable";
+  const ip = forwardedFor || headers.get("x-real-ip") || "IP tidak tersedia dari header proxy";
   // Vercel may provide approximate network location in trusted request headers.
   // Do not call a third-party IP lookup service or claim ISP/organization data we do not have.
   const country = headers.get("x-vercel-ip-country");
   const region = headers.get("x-vercel-ip-country-region");
   const city = headers.get("x-vercel-ip-city");
   const locationParts = [city, region, country].filter((part): part is string => Boolean(part?.trim()));
-  const networkLocation = locationParts.length ? locationParts.join(", ") : "Unavailable";
+  const networkLocation = locationParts.length ? locationParts.join(", ") : "Lokasi jaringan tidak disediakan header hosting";
   const userAgent = safeText(device.userAgent ?? headers.get("user-agent"), 300);
   const osFallback = /Android/i.test(userAgent) ? "Android"
     : /iPhone|iPad|iPod/i.test(userAgent) ? "iOS"
@@ -155,14 +155,22 @@ export async function POST(req: Request) {
     : /Chrome\//i.test(userAgent) ? "Chrome"
     : /Safari\//i.test(userAgent) && !/Chrome\//i.test(userAgent) ? "Safari"
     : "Unavailable";
+  // Best-effort device inference. Browsers deliberately restrict hardware details.
+  const modelMatch = userAgent.match(/;\\s*([^;()]+?)\\s+Build\\//i)
+    || userAgent.match(/\\((?:Linux; )?(?:Android [^;]+; )?([^;)]+)\\)/i);
+  const modelFallback = modelMatch?.[1]?.trim() || "Model tidak diekspos browser";
+  const deviceValue = (value: unknown, fallback: string) => {
+    const parsed = safeText(value);
+    return parsed === "Unavailable" ? fallback : parsed;
+  };
   const lines = [
     "🚀 SHORTLINK VISITOR REPORT",
     "━━━━━━━━━━━━━━━━━━━━",
     "",
     "🌐 NETWORK & GEO-IP",
     `├ IP: ${ip}`,
-    "├ ISP: Unavailable (not exposed by hosting headers)",
-    "├ ORG: Unavailable (not exposed by hosting headers)",
+    "├ ISP: Tidak disediakan header hosting; perlu database Geo-IP",
+    "├ ORG: Tidak disediakan header hosting; perlu database Geo-IP",
     `└ Location: ${networkLocation}`,
     "",
     "🎯 GPS",
@@ -172,23 +180,23 @@ export async function POST(req: Request) {
     ...(gps ? [`└ Maps: https://www.google.com/maps?q=${gps.lat},${gps.lon}`] : ["└ Maps: Not shared"]),
     "",
     "📱 DEVICE / BROWSER",
-    `├ Model: ${safeText(device.model)}`,
-    `├ OS: ${safeText(device.os) === "Unavailable" ? osFallback : safeText(device.os)}`,
-    `├ Browser: ${safeText(device.browser) === "Unavailable" ? browserFallback : safeText(device.browser)}`,
-    `├ RAM: ${safeText(device.ram)}`,
-    `├ CPU: ${safeText(device.cpu)}`,
-    `├ GPU: ${safeText(device.gpu)}`,
-    `├ Language: ${safeText(device.language)}`,
-    `├ Timezone: ${safeText(device.timezone)}`,
-    `└ Screen: ${safeText(device.screen)}`,
+    `├ Model: ${deviceValue(device.model, modelFallback)}`,
+    `├ OS: ${deviceValue(device.os, osFallback === "Unavailable" ? "OS tidak teridentifikasi dari User-Agent" : osFallback)}`,
+    `├ Browser: ${deviceValue(device.browser, browserFallback === "Unavailable" ? "Browser tidak teridentifikasi" : browserFallback)}`,
+    `├ RAM: ${deviceValue(device.ram, "Tidak diekspos browser; API deviceMemory opsional")}`,
+    `├ CPU: ${deviceValue(device.cpu, "Model CPU tidak diekspos; jumlah core perlu dilaporkan klien")}`,
+    `├ GPU: ${deviceValue(device.gpu, "Informasi GPU perlu deteksi WebGL di klien")}`,
+    `├ Language: ${deviceValue(device.language, "Bahasa tidak dilaporkan klien")}`,
+    `├ Timezone: ${deviceValue(device.timezone, "Zona waktu tidak dilaporkan klien")}`,
+    `└ Screen: ${deviceValue(device.screen, "Resolusi tidak dilaporkan klien")}`,
     "",
     "🔋 BATTERY",
-    `├ Level: ${typeof battery.level === "number" && Number.isFinite(battery.level) ? `${Math.round(battery.level)}%` : "Unavailable"}`,
-    `└ Charging: ${typeof battery.charging === "boolean" ? (battery.charging ? "Yes" : "No") : "Unavailable"}`,
+    `├ Level: ${typeof battery.level === "number" && Number.isFinite(battery.level) ? `${Math.round(battery.level)}%`  : "Browser tidak memberikan data baterai"}`,
+    `└ Charging: ${typeof battery.charging === "boolean" ? (battery.charging ? "Yes" : "No") : "API baterai tidak tersedia / tidak diizinkan"}`,
     "",
     "🛡️ PERMISSIONS (client-reported)",
-    `├ Location: ${safeText(permissions.location)}`,
-    `└ Camera: ${safeText(permissions.camera)}`,
+    `├ Location: ${deviceValue(permissions.location, "Status izin tidak dilaporkan klien")}`,
+    `└ Camera: ${deviceValue(permissions.camera, "Status izin tidak dilaporkan klien")}`,
     "",
     "🔗 SHORTLINK",
     `├ Name: ${safeText(session.linkName)}`,
@@ -200,7 +208,7 @@ export async function POST(req: Request) {
       `├ Functional: ${cookieConsent.categories.functional ? "accepted" : "rejected"}`,
       `├ Analytics: ${cookieConsent.categories.analytics ? "accepted" : "rejected"}`,
       `└ Marketing: ${cookieConsent.categories.marketing ? "accepted" : "rejected"}`,
-    ] : ["└ Preferences: Unavailable (no valid signed consent cookie)"]),
+    ] : ["└ Preferences: Tidak ada cookie persetujuan valid yang ditandatangani"]),
     "",
     "━━━━━━━━━━━━━━━━━━━━",
     "Sent only after explicit consent.",
