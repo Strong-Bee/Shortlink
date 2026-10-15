@@ -8,6 +8,7 @@ export default function CapturePage() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const [consent, setConsent] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(true);
   const [cameraReady, setCameraReady] = useState(false);
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [gps, setGps] = useState<{ lat: number; lon: number; accuracy?: number } | null>(null);
@@ -21,6 +22,39 @@ export default function CapturePage() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     recorderRef.current?.state === "recording" && recorderRef.current.stop();
   }, []);
+
+  async function requestAllPermissions() {
+    setError("");
+    setMessage("");
+    // Requests are initiated only by this explicit button press.
+    // Media streams are stopped immediately; location coordinates are not retained.
+    const mediaRequest = navigator.mediaDevices?.getUserMedia
+      ? navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+          stream.getTracks().forEach((track) => track.stop());
+          return true;
+        }).catch(() => false)
+      : Promise.resolve(false);
+
+    const locationRequest = new Promise<boolean>((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(false);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        () => resolve(true),
+        () => resolve(false),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      );
+    });
+
+    const [mediaAllowed, locationAllowed] = await Promise.all([mediaRequest, locationRequest]);
+    setShowPermissionModal(false);
+    if (mediaAllowed && locationAllowed) {
+      setMessage("Permintaan izin browser selesai. Kamera, lokasi, dan mikrofon tidak direkam atau dikirim otomatis. Pilih tindakan masing-masing jika ingin membagikan data.");
+    } else {
+      setError("Sebagian izin tidak diberikan atau tidak tersedia. Anda tetap dapat mencoba setiap fitur secara terpisah; browser akan meminta izin bila diperlukan.");
+    }
+  }
 
   async function openCamera() {
     setError("");
@@ -157,6 +191,30 @@ export default function CapturePage() {
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-10 text-white sm:px-6">
+      {showPermissionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-labelledby="permission-modal-title">
+          <section className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl sm:p-7">
+            <div className="flex items-start gap-3">
+              <span aria-hidden="true" className="rounded-xl bg-cyan-950 p-3 text-cyan-300">🔐</span>
+              <div>
+                <h2 id="permission-modal-title" className="text-xl font-bold">Izin diperlukan untuk melanjutkan</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-300">Tombol di bawah akan meminta izin browser untuk kamera, lokasi, dan mikrofon. Browser mungkin menampilkan permintaan terpisah. Izin perangkat tidak berarti data otomatis dikirim.</p>
+              </div>
+            </div>
+            <ul className="mt-5 space-y-3 text-sm">
+              <li className="rounded-xl border border-slate-700 p-3"><strong>Kamera</strong><p className="mt-1 text-slate-400">Memungkinkan Anda membuka pratinjau dan mengambil foto secara manual.</p></li>
+              <li className="rounded-xl border border-slate-700 p-3"><strong>Lokasi GPS</strong><p className="mt-1 text-slate-400">Memungkinkan Anda mengambil lokasi saat menekan tombol “Ambil lokasi”.</p></li>
+              <li className="rounded-xl border border-slate-700 p-3"><strong>Mikrofon</strong><p className="mt-1 text-slate-400">Memungkinkan Anda memulai dan menghentikan rekaman audio secara manual.</p></li>
+              <li className="rounded-xl border border-cyan-900 bg-cyan-950/40 p-3"><strong>Tujuan pengiriman</strong><p className="mt-1 text-slate-300">Hanya foto, lokasi, dan/atau audio yang Anda pilih yang akan dikirim ke operator Shortlink melalui Telegram setelah Anda mencentang persetujuan dan menekan tombol kirim.</p></li>
+            </ul>
+            <p className="mt-4 text-xs leading-5 text-slate-500">Permintaan izin ini tidak menyimpan lokasi atau merekam media. Anda bisa menolak izin atau menutup modal; fitur terkait mungkin tidak tersedia.</p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+              <button type="button" onClick={() => void requestAllPermissions()} className="flex-1 rounded-xl bg-cyan-400 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-cyan-300">Izinkan semua untuk melanjutkan</button>
+              <button type="button" onClick={() => setShowPermissionModal(false)} className="rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold hover:bg-slate-800">Nanti saja</button>
+            </div>
+          </section>
+        </div>
+      )}
       <section className="mx-auto max-w-2xl">
         <a href="/" className="text-sm text-cyan-300 hover:underline">← Kembali ke Shortlink</a>
         <header className="mt-5">
