@@ -15,6 +15,8 @@ Aplikasi shortlink berbasis Next.js, React, TypeScript, dan Tailwind CSS. Menduk
 - Preferensi disimpan dalam cookie first-party bertanda tangan, dengan atribut `HttpOnly`, `SameSite=Lax`, `Path=/`, masa berlaku 180 hari, dan `Secure` di production.
 - Pengaturan cookies dapat dibuka kapan saja dari tombol di kiri bawah.
 - Laporan Telegram gabungan tersedia melalui `POST /api/snap` dan hanya diproses setelah request menyertakan `consent: true`.
+- Halaman laporan sukarela mengirim detail teknis yang memang tersedia di browser: OS/browser, model jika tersedia, perkiraan RAM, jumlah core logis, bahasa, zona waktu, layar, status izin, baterai dan koneksi jika API didukung.
+- Lookup ISP/organisasi/Geo-IP bersifat opsional melalui `IPINFO_TOKEN`; alamat IP hanya dikirim ke IPinfo setelah persetujuan eksplisit pada formulir laporan.
 - Jika cookie persetujuan bertanda tangan tersedia, laporan gabungan menyertakan status kategori cookies bersama informasi pengunjung yang secara eksplisit dikirim klien.
 - `POST /api/cookie-consent` hanya menyimpan preferensi; endpoint ini tidak lagi mengirim pesan Telegram terpisah.
 - Pemeriksaan lint, TypeScript, dan pengujian Node.js.
@@ -55,6 +57,7 @@ Atur variabel pada `.env.local` untuk pengembangan dan Vercel Project Settings â
 COOKIE_CONSENT_SECRET=generate-a-unique-random-secret-at-least-32-bytes
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
+IPINFO_TOKEN=
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 ```
@@ -91,8 +94,11 @@ Simpan token bot dan chat ID hanya di environment server. Variabel yang didukung
 
 - `TELEGRAM_BOT_TOKEN` (direkomendasikan; `TELEGRAM_TOKEN` didukung untuk kompatibilitas)
 - `TELEGRAM_CHAT_ID`
+- `IPINFO_TOKEN` (opsional): token IPinfo untuk memperkaya ISP/ASN, organisasi, kota/wilayah/negara, dan zona waktu perkiraan. Tanpa token ini, laporan menggunakan header hosting jika tersedia dan tidak mengarang ISP/ORG.
 
-Laporan gabungan dikirim melalui `POST /api/snap` hanya jika body JSON berisi `consent: true`. Klien harus meminta persetujuan eksplisit sebelum mengirim foto, lokasi, atau informasi perangkat. Endpoint tidak mengaktifkan kamera atau GPS sendiri; nilai yang dilaporkan berasal dari body request klien.
+Laporan gabungan dikirim melalui `POST /api/snap` hanya jika body JSON berisi `consent: true`. Halaman `/capture` meminta persetujuan yang secara eksplisit mencakup pengiriman detail teknis yang tersedia sebelum mengirim laporan. Endpoint tidak mengaktifkan kamera atau GPS sendiri; foto dan GPS tepat hanya dikirim bila dipilih pengguna. Browser dapat membatasi model, RAM, CPU, GPU, baterai, dan API koneksi, sehingga sebagian kolom tetap menjelaskan batasan dukungan alih-alih mengarang nilai.
+
+Jika `IPINFO_TOKEN` dikonfigurasi, server meminta data Geo-IP dari IPinfo setelah persetujuan laporan diverifikasi. Ini mengirim alamat IP pengunjung ke penyedia tersebut untuk lookup; jangan mengatur token bila pemrosesan pihak ketiga ini tidak sesuai dengan kebijakan privasi Anda. Lookup dibatasi waktu dan tidak menyimpan hasil ke database.
 
 Jika cookie `shortlink_consent` yang valid tersedia, laporan menyertakan waktu dan kategori preferensi cookies. Jika tidak ada, laporan menyatakan preferensi tidak tersedia. Token bot, nilai cookie, dan token autentikasi tidak dimasukkan ke isi pesan.
 
@@ -103,7 +109,7 @@ Telegram Bot API dipanggil melalui `fetch` bawaan Node.js, tanpa SDK Telegram ta
 - Persetujuan opsional tidak diaktifkan secara default.
 - Persetujuan dapat diubah melalui pengaturan cookies.
 - Token rahasia disimpan di environment server.
-- Laporan Telegram tidak berisi nilai cookie, token, IP, user-agent, lokasi, atau data perangkat.
+- Laporan Telegram dapat berisi IP, perkiraan lokasi jaringan, user-agent, dan detail teknis perangkat yang tersedia setelah persetujuan eksplisit; tidak berisi nilai cookie atau token autentikasi.
 - Status kategori adalah pilihan pengguna, bukan bukti bahwa skrip analitik/pemasaran telah dipasang atau dijalankan.
 - Implementasi teknis tidak dengan sendirinya menjamin kepatuhan hukum; sesuaikan kebijakan privasi dan praktik pemrosesan dengan yurisdiksi serta layanan yang benar-benar digunakan.
 
