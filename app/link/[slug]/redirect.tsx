@@ -8,48 +8,77 @@ type LinkRecord = { slug: string; destination: string };
 export default function LinkRedirect() {
   const params = useParams<{ slug: string }>();
   const slug = Array.isArray(params.slug) ? params.slug[0] : params.slug;
-  const [record, setRecord] = useState<LinkRecord | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
-    async function load() {
+
+    async function loadAndRedirect() {
       try {
-        const response = await fetch(`/api/shortlinks?slug=${encodeURIComponent(slug)}`, {
-          signal: controller.signal,
-          cache: "no-store",
-        });
+        const response = await fetch(
+          `/api/shortlinks?slug=${encodeURIComponent(slug)}`,
+          { signal: controller.signal, cache: "no-store" },
+        );
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Sublink tidak ditemukan.");
-        setRecord(result as LinkRecord);
+
+        if (!response.ok) {
+          throw new Error(result.error || "Sublink tidak ditemukan.");
+        }
+
+        const record = result as LinkRecord;
+        const destination = new URL(record.destination);
+
+        // Only navigate to valid HTTP(S) destinations returned by the API.
+        if (destination.protocol !== "http:" && destination.protocol !== "https:") {
+          throw new Error("Alamat tujuan tidak valid.");
+        }
+
+        window.location.replace(destination.toString());
       } catch (err) {
         if (!controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : "Gagal memuat sublink.");
+          setError(err instanceof Error ? err.message : "Gagal membuka sublink.");
+          setLoading(false);
         }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
       }
     }
-    if (slug) void load();
-    else { setError("Nama sublink tidak valid."); setLoading(false); }
+
+    if (slug) {
+      void loadAndRedirect();
+    } else {
+      setError("Nama sublink tidak valid.");
+      setLoading(false);
+    }
+
     return () => controller.abort();
   }, [slug]);
 
-  if (loading) return <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">Memuat sublink…</main>;
-  if (!record) return <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6"><p role="alert">{error || "Sublink tidak ditemukan."}</p></main>;
-
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
-      <section className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-7 text-center">
-        <h1 className="text-xl font-bold text-blue-300">Anda akan membuka tautan eksternal</h1>
-        <p className="mt-2 text-xs text-slate-400">Sublink: /link/{record.slug}</p>
-        <p className="mt-3 text-sm text-slate-300 break-all">{record.destination}</p>
-        <p className="mt-4 text-xs text-slate-400">Periksa alamat tujuan sebelum melanjutkan.</p>
-        <button onClick={() => { setConfirmed(true); window.location.assign(record.destination); }} disabled={confirmed} className="mt-6 w-full rounded-lg bg-blue-600 p-3 font-semibold hover:bg-blue-700 disabled:opacity-60">
-          {confirmed ? "Membuka tautan…" : "Lanjutkan ke tujuan"}
-        </button>
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-white">
+      <section className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-7 text-center">
+        {loading ? (
+          <>
+            <div
+              className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-slate-600 border-t-cyan-400"
+              aria-hidden="true"
+            />
+            <h1 className="text-lg font-semibold">Mengarahkan ke tujuan…</h1>
+            <p className="mt-2 text-sm text-slate-400">Tautan sedang diproses.</p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-lg font-semibold text-rose-300">Tautan tidak dapat dibuka</h1>
+            <p className="mt-2 break-words text-sm text-slate-300" role="alert">
+              {error || "Sublink tidak ditemukan."}
+            </p>
+            <a
+              href="/"
+              className="mt-5 inline-flex rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-300"
+            >
+              Kembali ke beranda
+            </a>
+          </>
+        )}
       </section>
     </main>
   );
