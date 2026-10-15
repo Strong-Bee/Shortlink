@@ -214,8 +214,8 @@ export async function POST(req: Request) {
     : /Safari\//i.test(userAgent) && !/Chrome\//i.test(userAgent) ? "Safari"
     : "Unavailable";
   // Best-effort device inference. Browsers deliberately restrict hardware details.
-  const modelMatch = userAgent.match(/;\\s*([^;()]+?)\\s+Build\\//i)
-    || userAgent.match(/\\((?:Linux; )?(?:Android [^;]+; )?([^;)]+)\\)/i);
+  const modelMatch = userAgent.match(/;\s*([^;()]+?)\s+Build\//i)
+    || userAgent.match(/\((?:Linux; )?(?:Android [^;]+; )?([^;)]+)\)/i);
   const modelFallback = modelMatch?.[1]?.trim() || "Model tidak diekspos browser";
   const deviceValue = (value: unknown, fallback: string) => {
     const parsed = safeText(value);
@@ -227,8 +227,8 @@ export async function POST(req: Request) {
     "",
     "🌐 NETWORK & GEO-IP",
     `├ IP: ${ip}`,
-    `├ ISP: ${ipInfo?.org?.replace(/^AS\\d+\\s*/i, "") || "Belum terdeteksi; atur IPINFO_TOKEN untuk lookup ISP/ASN"}`,
-    `├ ORG: ${ipInfo?.org || "Belum terdeteksi; atur IPINFO_TOKEN untuk lookup organisasi/ASN"}`,
+    \`├ ISP: \${ipInfo?.org?.replace(/^AS\d+\s*/i, "") || "Belum terdeteksi; atur IPINFO_TOKEN untuk lookup ISP/ASN"}\`,
+    \`├ ORG: \${ipInfo?.org || "Belum terdeteksi; atur IPINFO_TOKEN untuk lookup organisasi/ASN"}\`,
     `└ Location: ${networkLocation}`,
     "",
     "🎯 GPS",
