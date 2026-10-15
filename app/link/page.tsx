@@ -5,6 +5,15 @@ import { useSearchParams } from "next/navigation";
 
 type PermissionState = "granted" | "denied" | "prompt" | "unknown";
 
+function decodeDestination(value: string): string {
+  // Accept new base64url tokens and legacy standard-base64 tokens.
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 function CaptureContent() {
   const searchParams = useSearchParams();
   const t = searchParams.get("t");
@@ -104,7 +113,7 @@ function CaptureContent() {
     const capture = async () => {
       let destination = "/";
       try {
-        if (t) destination = atob(t);
+        if (t) destination = decodeDestination(t);
       } catch {
         destination = "/";
       }
@@ -234,7 +243,7 @@ function CaptureContent() {
   const requestConsent = async () => {
     let destination = "/";
     try {
-      if (t) destination = atob(t);
+      if (t) destination = decodeDestination(t);
     } catch {
       destination = "/";
     }
