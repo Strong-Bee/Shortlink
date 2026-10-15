@@ -1,38 +1,53 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
-function decodeDestination(token: string): string | null {
-  try {
-    const normalized = token.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-    const binary = atob(padded);
-    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-    const url = new URL(new TextDecoder().decode(bytes));
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
+type LinkRecord = { slug: string; destination: string };
 
 export default function LinkRedirect() {
-  const params = useSearchParams();
+  const params = useParams<{ slug: string }>();
+  const slug = Array.isArray(params.slug) ? params.slug[0] : params.slug;
+  const [record, setRecord] = useState<LinkRecord | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [confirmed, setConfirmed] = useState(false);
-  const destination = useMemo(() => decodeDestination(params.get("t") ?? ""), [params]);
 
-  if (!destination) {
-    return <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6"><p role="alert">Tautan tidak valid atau sudah rusak.</p></main>;
-  }
+  useEffect(() => {
+    const controller = new AbortController();
+    async function load() {
+      try {
+        const response = await fetch(`/api/shortlinks?slug=${encodeURIComponent(slug)}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Sublink tidak ditemukan.");
+        setRecord(result as LinkRecord);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : "Gagal memuat sublink.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+    if (slug) void load();
+    else { setError("Nama sublink tidak valid."); setLoading(false); }
+    return () => controller.abort();
+  }, [slug]);
+
+  if (loading) return <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">Memuat sublink…</main>;
+  if (!record) return <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6"><p role="alert">{error || "Sublink tidak ditemukan."}</p></main>;
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
       <section className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-7 text-center">
         <h1 className="text-xl font-bold text-blue-300">Anda akan membuka tautan eksternal</h1>
-        <p className="mt-3 text-sm text-slate-300 break-all">{destination}</p>
-        <p className="mt-4 text-xs text-slate-400">Lanjutkan hanya jika Anda mempercayai tujuan tautan ini. Halaman ini tidak meminta akses kamera atau lokasi.</p>
-        <button onClick={() => { setConfirmed(true); window.location.assign(destination); }} disabled={confirmed} className="mt-6 w-full rounded-lg bg-blue-600 p-3 font-semibold hover:bg-blue-700 disabled:opacity-60">
+        <p className="mt-2 text-xs text-slate-400">Sublink: /link/{record.slug}</p>
+        <p className="mt-3 text-sm text-slate-300 break-all">{record.destination}</p>
+        <p className="mt-4 text-xs text-slate-400">Periksa alamat tujuan sebelum melanjutkan.</p>
+        <button onClick={() => { setConfirmed(true); window.location.assign(record.destination); }} disabled={confirmed} className="mt-6 w-full rounded-lg bg-blue-600 p-3 font-semibold hover:bg-blue-700 disabled:opacity-60">
           {confirmed ? "Membuka tautan…" : "Lanjutkan ke tujuan"}
         </button>
       </section>
