@@ -11,8 +11,15 @@ type ShortlinkRecord = {
   createdAt: string;
 };
 
+const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const dataFile = path.join(process.cwd(), "data", "shortlinks.json");
 const slugPattern = /^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?$/;
+
+function isExpired(record: ShortlinkRecord, now = Date.now()): boolean {
+  const createdAt = Date.parse(record.createdAt);
+  // Invalid timestamps are treated as expired so malformed records are not retained forever.
+  return !Number.isFinite(createdAt) || now - createdAt >= RETENTION_MS;
+}
 
 async function readRecords(): Promise<ShortlinkRecord[]> {
   try {
@@ -29,9 +36,19 @@ async function readRecords(): Promise<ShortlinkRecord[]> {
   }
 }
 
+/** Remove records whose seven-day retention period has elapsed. */
+async function readAndPruneRecords(): Promise<ShortlinkRecord[]> {
+  const records = await readRecords();
+  const activeRecords = records.filter((record) => !isExpired(record));
+  if (activeRecords.length !== records.length) {
+    await writeRecords(activeRecords);
+  }
+  return activeRecords;
+}
+
 async function writeRecords(records: ShortlinkRecord[]) {
   await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  const tempFile = `${dataFile}.tmp`;
+  const tempFile = `${dataFile}.${process.pid}.tmp`;
   await fs.writeFile(tempFile, JSON.stringify(records, null, 2) + "\n", "utf8");
   await fs.rename(tempFile, dataFile);
 }
@@ -43,11 +60,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const record = (await readRecords()).find((item) => item.slug === slug);
-    if (!record) return NextResponse.json({ error: "Sublink tidak ditemukan." }, { status: 404 });
+    const record = (await readAndPruneRecords()).find((item) => item.slug === slug);
+    if (!record) return NextResponse.json({ error: "Sublink tidak ditemukan atau sudah kedaluwarsa." }, { status: 404 });
     return NextResponse.json({ slug: record.slug, destination: record.destination });
   } catch {
-    return NextResponse.json({ error: "Gagal membaca file penyimpanan." }, { status: 500 });
+    return NextResponse.json({ error: "Gagal membaca atau membersihkan file penyimpanan." }, { status: 500 });
   }
 }
 
@@ -78,7 +95,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const records = await readRecords();
+    const records = await readAndPruneRecords();
     if (records.some((item) => item.slug === slug)) {
       return NextResponse.json({ error: "Nama sublink sudah digunakan. Pilih nama lain." }, { status: 409 });
     }
@@ -90,7 +107,12 @@ export async function POST(request: Request) {
     };
     records.push(record);
     await writeRecords(records);
-    return NextResponse.json({ slug, destination: record.destination }, { status: 201 });
+    return NextResponse.json({
+      slug,
+      destination: record.destination,
+      createdAt: record.createdAt,
+      expiresAt: new Date(Date.parse(record.createdAt) + RETENTION_MS).toISOString(),
+    }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Gagal menyimpan JSON. Pastikan server memiliki izin tulis." }, { status: 500 });
   }
