@@ -13,18 +13,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Metadata yang lebih netral agar tidak mencurigakan saat link dibagikan
 export const metadata: Metadata = {
-  title: "Secure Cloud Link",
-  description: "Verified encrypted connection for secure data transfer.",
+  title: "Shortlink — Tautan Ringkas, Mudah Dibagikan",
+  description: "Buat shortlink dengan nama khusus, bagikan dengan mudah, dan kelola tautan yang berlaku selama tujuh hari.",
+  applicationName: "Shortlink",
   robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,
 };
 
 export default function RootLayout({
