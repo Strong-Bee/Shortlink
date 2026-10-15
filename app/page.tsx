@@ -96,9 +96,14 @@ export default function HomePage() {
             <span className="block text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">Simple. Clear. Connected.</span>
           </span>
         </a>
-        <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-medium text-slate-300 sm:flex">
-          <span className="h-2 w-2 rounded-full bg-lime-300 shadow-[0_0_12px_rgba(190,242,100,0.7)]" />
-          Link creation, made simple
+        <div className="flex items-center gap-2">
+          <a href="/capture" className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-300/20 sm:px-4">
+            Pusat laporan sukarela
+          </a>
+          <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-medium text-slate-300 lg:flex">
+            <span className="h-2 w-2 rounded-full bg-lime-300 shadow-[0_0_12px_rgba(190,242,100,0.7)]" />
+            Link creation, made simple
+          </div>
         </div>
       </header>
 
