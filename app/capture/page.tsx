@@ -242,10 +242,6 @@ export default function CapturePage() {
       setError("Hentikan rekaman audio sebelum mengirim.");
       return;
     }
-    if (!photo && !gps && !audio) {
-      setError("Pilih setidaknya satu data: foto, lokasi, atau audio.");
-      return;
-    }
     if (photo && photo.size > 3 * 1024 * 1024) {
       setError("Ukuran foto maksimal 3 MB.");
       return;
@@ -390,9 +386,9 @@ export default function CapturePage() {
           {error && <p role="alert" className="rounded-lg border border-rose-900 bg-rose-950/50 p-3 text-sm text-rose-200">{error}</p>}
           {message && <p role="status" className="rounded-lg border border-emerald-900 bg-emerald-950/50 p-3 text-sm text-emerald-200">{message}</p>}
           <button type="button" onClick={() => void sendReport()} disabled={busy || !consent || recording} className="w-full rounded-xl bg-cyan-400 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40">
-            {busy ? "Mengirim laporan…" : "Kirim data yang dipilih ke Telegram"}
+            {busy ? "Mengirim laporan…" : "Kirim laporan ke Telegram"}
           </button>
-          <p className="text-xs leading-5 text-slate-500">Kirim hanya jika Anda memahami dan menyetujui tujuan pengumpulan data. Anda dapat menutup halaman kapan saja; stream kamera dan mikrofon dihentikan saat halaman ditutup.</p>
+          <p className="text-xs leading-5 text-slate-500">Anda dapat mengirim laporan teknis saja tanpa foto, lokasi GPS, atau audio. Media hanya dikirim jika Anda memilihnya. Anda dapat menutup halaman kapan saja; stream kamera dan mikrofon dihentikan saat halaman ditutup.</p>
         </div>
       </section>
     </main>
