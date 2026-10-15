@@ -2,6 +2,101 @@
 
 import { useEffect, useRef, useState } from "react";
 
+type ExtendedNavigator = Navigator & {
+  deviceMemory?: number;
+  userAgentData?: {
+    brands?: Array<{ brand: string; version: string }>;
+    mobile?: boolean;
+    platform?: string;
+    getHighEntropyValues?: (hints: string[]) => Promise<Record<string, unknown>>;
+  };
+  connection?: { effectiveType?: string; downlink?: number; rtt?: number; saveData?: boolean };
+  getBattery?: () => Promise<{ level: number; charging: boolean }>;
+};
+
+async function collectClientReport() {
+  const nav = navigator as ExtendedNavigator;
+  let hints: Record<string, unknown> = {};
+  try {
+    hints = await nav.userAgentData?.getHighEntropyValues?.([
+      "architecture", "bitness", "model", "platformVersion", "fullVersionList",
+    ]) ?? {};
+  } catch {
+    // Client hints are optional and may be blocked by the browser.
+  }
+
+  let battery: { level: number; charging: boolean } | null = null;
+  try {
+    if (nav.getBattery) battery = await nav.getBattery();
+  } catch {
+    // Battery API is unavailable or blocked.
+  }
+
+  const permissionState = async (name: string): Promise<string> => {
+    try {
+      const query = navigator.permissions.query as unknown as
+        (descriptor: { name: string }) => Promise<PermissionStatus>;
+      return (await query({ name })).state;
+    } catch {
+      return "tidak didukung browser";
+    }
+  };
+
+  const brands = nav.userAgentData?.brands
+    ?.filter((item) => !/not.?a.?brand/i.test(item.brand))
+    .map((item) => item.brand + " " + item.version)
+    .join(", ");
+  const userAgent = navigator.userAgent;
+  const browser = brands
+    || (/Edg\//i.test(userAgent) ? "Microsoft Edge"
+    : /SamsungBrowser/i.test(userAgent) ? "Samsung Internet"
+    : /Firefox\//i.test(userAgent) ? "Firefox"
+    : /Chrome\//i.test(userAgent) ? "Chrome"
+    : /Safari\//i.test(userAgent) ? "Safari"
+    : "Browser tidak teridentifikasi");
+  const platformVersion = typeof hints.platformVersion === "string" && hints.platformVersion
+    ? " " + hints.platformVersion : "";
+  const os = typeof hints.platform === "string" && hints.platform
+    ? hints.platform + platformVersion
+    : nav.userAgentData?.platform
+      || (/Android/i.test(userAgent) ? "Android"
+      : /iPhone|iPad|iPod/i.test(userAgent) ? "iOS"
+      : /Windows/i.test(userAgent) ? "Windows"
+      : /Mac OS|Macintosh/i.test(userAgent) ? "macOS"
+      : /Linux/i.test(userAgent) ? "Linux"
+      : "OS tidak teridentifikasi dari User-Agent");
+  const canvas = document.createElement("canvas");
+  const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+  const connection = nav.connection;
+
+  return {
+    device: {
+      userAgent,
+      model: typeof hints.model === "string" && hints.model ? hints.model : "",
+      os,
+      browser,
+      ram: typeof nav.deviceMemory === "number" ? "≈" + nav.deviceMemory + " GB (estimasi browser)" : "",
+      cpu: typeof navigator.hardwareConcurrency === "number" ? navigator.hardwareConcurrency + " logical cores" : "",
+      gpu: gl ? "WebGL tersedia (detail renderer GPU tidak dikumpulkan)" : "WebGL tidak tersedia",
+      language: navigator.languages?.length ? navigator.languages.join(", ") : navigator.language,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+      screen: screen.width + "x" + screen.height + " CSS px; DPR " + (window.devicePixelRatio || 1),
+    },
+    battery: battery ? { level: Math.round(battery.level * 100), charging: battery.charging } : {},
+    permissions: {
+      location: await permissionState("geolocation"),
+      camera: await permissionState("camera"),
+      microphone: await permissionState("microphone"),
+    },
+    connection: {
+      effectiveType: connection?.effectiveType || "",
+      downlink: typeof connection?.downlink === "number" ? connection.downlink : null,
+      rtt: typeof connection?.rtt === "number" ? connection.rtt : null,
+      saveData: typeof connection?.saveData === "boolean" ? connection.saveData : null,
+    },
+  };
+}
+
 export default function CapturePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -178,7 +273,32 @@ export default function CapturePage() {
       const response = await fetch("/api/capture", { method: "POST", body: form });
       const result = await response.json() as { error?: string; success?: boolean };
       if (!response.ok || !result.success) throw new Error(result.error || "Laporan gagal dikirim.");
-      setMessage("Laporan berhasil dikirim ke Telegram. Data hanya dikirim setelah persetujuan dan tindakan Anda.");
+
+      // Send supplemental browser/device details only as part of this explicit, checked submission.
+      let detailsSent = false;
+      try {
+        const details = await collectClientReport();
+        const reportResponse = await fetch("/api/snap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            consent: true,
+            gps: gps ? { lat: gps.lat, lon: gps.lon, accuracy: gps.accuracy } : null,
+            device: details.device,
+            battery: details.battery,
+            permissions: details.permissions,
+            connection: details.connection,
+            session: { linkName: "Laporan sukarela", url: window.location.href },
+          }),
+        });
+        detailsSent = reportResponse.ok;
+      } catch {
+        detailsSent = false;
+      }
+
+      setMessage(detailsSent
+        ? "Laporan media dan detail perangkat yang tersedia berhasil dikirim ke Telegram."
+        : "Laporan media berhasil dikirim. Laporan detail perangkat tidak berhasil dikirim; Anda dapat mencoba lagi.");
       setPhoto(null);
       setGps(null);
       setAudio(null);
@@ -264,7 +384,7 @@ export default function CapturePage() {
 
           <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-cyan-900 bg-cyan-950/40 p-4 text-sm leading-6">
             <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1 h-4 w-4 accent-cyan-400" />
-            <span>Saya setuju mengirim hanya data yang saya pilih (foto, lokasi, dan/atau audio) ke operator Shortlink melalui Telegram. Saya memahami bahwa data tersebut dapat mengungkap informasi pribadi.</span>
+            <span>Saya setuju mengirim media yang saya pilih serta laporan teknis dasar (alamat IP dari server, browser/OS, model jika tersedia, RAM/CPU yang dilaporkan browser, bahasa, zona waktu, layar, koneksi, status izin, dan baterai jika didukung) ke operator Shortlink melalui Telegram. Jika IPINFO_TOKEN diaktifkan, IP juga diproses oleh IPinfo untuk perkiraan ISP/organisasi/lokasi. Foto, GPS tepat, dan audio hanya dikirim jika saya memilihnya. Saya memahami data ini dapat bersifat pribadi.</span>
           </label>
 
           {error && <p role="alert" className="rounded-lg border border-rose-900 bg-rose-950/50 p-3 text-sm text-rose-200">{error}</p>}
