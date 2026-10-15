@@ -1,86 +1,80 @@
-# 🚀 Shortlink
+# Shortlink
 
-Database-less shortlink generator built with Next.js, TypeScript, browser APIs, Telegram reporting, and Playwright testing.
+Generator shortlink ringan berbasis Next.js dan TypeScript. Aplikasi membuat tautan dengan menyandikan URL tujuan ke dalam parameter URL, sehingga **tidak memerlukan database** untuk pembuatan tautan dasar.
 
-## Features
+## Fitur
 
-- Shortlink generation without a database.
-- Encoded destination and automatic redirect.
-- Permission-controlled geolocation and camera access.
-- GPS coordinates plus device-reported accuracy, altitude, heading, speed and timestamp when available.
-- Browser-reported device, screen, viewport, CPU, RAM, GPU, language and timezone information.
-- Battery and Network Information API when supported.
-- Server-side client IP and Geo-IP enrichment.
-- Zod validation for incoming telemetry.
-- Telegram Bot API reporting.
-- Sharp available for server-side image processing.
-- Security dependencies available for Express-based deployments: Helmet, CORS and express-rate-limit.
-- Pino logging dependencies available for server/Express deployments.
-- Playwright-based Chromium testing.
-- No cookie, localStorage, clipboard, credential or authentication-token collection.
+- Membuat tautan tujuan dengan parameter `/link?t=...`.
+- Validasi URL tujuan: hanya protokol `http:` dan `https:` yang diterima.
+- Encoding Base64 URL-safe dan dukungan URL Unicode.
+- Tombol salin tautan dengan fallback untuk browser yang tidak mendukung Clipboard API.
+- Halaman pengalihan kompatibel dengan token Base64 standar lama.
+- Endpoint laporan Telegram pada `/api/snap` (opsional; membutuhkan konfigurasi server).
 
-## Stack
+## Teknologi
 
-- Next.js 16 / React 19
+- Next.js 16
+- React 19
 - TypeScript
-- Tailwind CSS
-- Axios
-- Zod
-- Sharp
-- Express
-- Helmet
-- CORS
-- express-rate-limit
-- Pino / pino-http
-- Playwright
+- Tailwind CSS 4
+- Axios untuk komunikasi server-side dengan layanan Geo-IP dan Telegram
 
-## Installation
+## Persyaratan
+
+- Node.js yang kompatibel dengan versi Next.js yang digunakan.
+- npm.
+
+## Instalasi lokal
 
 ```bash
 git clone https://github.com/Strong-Bee/Shortlink.git
 cd Shortlink
-npm install
-npx playwright install chromium
+npm ci
+npm run dev
 ```
 
-If dependencies were changed and the lockfile is stale, run `npm install` to regenerate `package-lock.json`.
+Buka [http://localhost:3000](http://localhost:3000).
 
-## Environment
-
-Create `.env.local`:
-
-```env
-TELEGRAM_TOKEN=your_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
-```
-
-Never commit bot tokens or other secrets.
-
-## Testing
+## Perintah
 
 ```bash
-npm test
-npm run test:headed
-npm run test:ui
-npm run test:debug
+npm run dev       # Server pengembangan
+npm run build     # Build produksi
+npm run start     # Menjalankan build produksi
+npm run lint      # Pemeriksaan ESLint
 ```
 
-Playwright is used for automated local testing. Its geolocation and permission controls are test fixtures; production browsers continue to enforce their normal permission model.
+## Konfigurasi Telegram (opsional)
 
-## Data accuracy
+Buat file `.env.local` di root proyek:
 
-GPS is sourced from the browser Geolocation API and includes the accuracy reported by the device. Geo-IP is a separate network-level estimate and must not be represented as GPS.
+```env
+TELEGRAM_TOKEN=
+TELEGRAM_CHAT_ID=
+```
 
-RAM, GPU, connection information and some platform details are browser-exposed values and may be reduced or unavailable because of browser privacy controls. The application reports unavailable values rather than inventing them.
+Jangan commit token atau rahasia ke repository. Jika variabel Telegram tidak diatur, endpoint laporan akan mengembalikan error konfigurasi.
 
-Camera information is taken from MediaStream track settings after permission is granted.
+## Catatan arsitektur
 
-## Security and privacy
+Tautan yang dihasilkan menyimpan URL tujuan dalam parameter query, bukan sebagai record di database. Artinya:
 
-- Telegram credentials stay server-side.
-- Incoming telemetry is validated with Zod.
-- Use HTTPS in production for browser permission APIs.
-- Do not collect cookies, localStorage, clipboard contents, credentials or authentication tokens.
-- Use this project only with authorization and informed permission for requested browser capabilities.
+- Tidak ada database yang diperlukan untuk pembuatan tautan dasar.
+- URL yang panjang membuat parameter tautan ikut panjang.
+- Tautan dapat dibagikan atau dipindahkan, tetapi tidak menyediakan pengelolaan slug persisten seperti layanan shortener berbasis database.
+- Siapa pun yang memiliki tautan dapat membaca token dan mendekode URL tujuan; encoding bukan enkripsi.
 
-Developed by Strong-Bee.
+## Privasi dan keamanan
+
+- Gunakan fitur lokasi atau kamera hanya dengan pemberitahuan yang jelas dan persetujuan sadar dari pengunjung.
+- Browser tetap mengendalikan izin lokasi dan kamera; izin yang sudah diberikan sebelumnya mungkin tetap berlaku sesuai perilaku browser.
+- Jangan gunakan endpoint pelaporan untuk mengumpulkan atau mengirimkan data pribadi tanpa dasar yang sah dan persetujuan yang sesuai.
+- Pastikan deployment menggunakan HTTPS untuk API browser yang memerlukan secure context.
+- Batasi akses ke bot Telegram dan simpan kredensial hanya sebagai environment variables server.
+- Geo-IP adalah perkiraan lokasi jaringan, bukan koordinat GPS.
+
+## Lisensi
+
+Lihat file lisensi repository jika tersedia.
+
+Dikembangkan oleh Strong-Bee.
