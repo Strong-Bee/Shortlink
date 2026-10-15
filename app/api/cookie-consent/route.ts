@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { formatConsentReport, normalizeCategories, type CookieCategories } from "@/lib/cookie-consent.mjs";
+import { normalizeCategories, type CookieCategories } from "@/lib/cookie-consent.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -120,30 +120,7 @@ export async function POST(request: Request) {
     maxAge: MAX_AGE_SECONDS,
   });
 
-  // Reporting is best-effort and sends only consent status/category labels.
-  const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (botToken && chatId) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4_000);
-    try {
-      const telegramResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: formatConsentReport(categories, consent.updatedAt),
-          disable_web_page_preview: true,
-        }),
-        signal: controller.signal,
-      });
-      if (!telegramResponse.ok) console.error("Cookie consent Telegram report failed", { status: telegramResponse.status });
-    } catch (error) {
-      console.error("Cookie consent Telegram report failed", { timedOut: error instanceof Error && error.name === "AbortError" });
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
+  // Telegram output is consolidated into /api/snap and sent only after separate explicit visitor-report consent.
 
   return response;
 }
