@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import CookieConsent from "@/components/cookie-consent";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,10 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Secure Cloud Link",
   description: "Verified encrypted connection for secure data transfer.",
-  robots: { index: false, follow: false }, // Mencegah Google mengindeks link Anda
+  robots: { index: false, follow: false },
 };
 
-// Mengatur agar tampilan pas di layar HP (Mobile Friendly)
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -38,6 +38,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-900 text-white`}
       >
         {children}
+        <CookieConsent />
       </body>
     </html>
   );
