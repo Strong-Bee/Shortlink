@@ -90,8 +90,8 @@ export async function POST(request: Request) {
       const form = new FormData();
       form.set("chat_id", chatId);
       form.set("caption", "Audio dikirim dengan persetujuan eksplisit.");
-      form.set("voice", audioFile, audioFile.name || "recording.webm");
-      await sendTelegram(token, "sendVoice", form, controller.signal);
+      form.set("document", audioFile, audioFile.name || "recording.webm");
+      await sendTelegram(token, "sendDocument", form, controller.signal);
     }
 
     return NextResponse.json({ success: true, telegram: true });
