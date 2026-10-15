@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -25,7 +25,7 @@ export default function HomePage() {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const createLink = async (event: React.FormEvent<HTMLFormElement>) => {
+  const createLink = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setShortUrl("");
