@@ -102,7 +102,7 @@ export default function CookieConsent() {
                   <button type="button" disabled={loading} onClick={() => void save(defaultCategories)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50">
                     Tolak opsional
                   </button>
-                  <button type="button" disabled={loading} onClick={() => { setCategories({ necessary: true, functional: true, analytics: true, marketing: true }); setSettingsOpen(true); }} className="rounded-lg border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50">
+                  <button type="button" disabled={loading} onClick={() => setSettingsOpen(true)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50">
                     Sesuaikan
                   </button>
                   <button type="button" disabled={loading} onClick={() => void save({ necessary: true, functional: true, analytics: true, marketing: true })} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50">
