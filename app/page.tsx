@@ -2,23 +2,41 @@
 
 import React, { useState } from "react";
 
+function encodeBase64Url(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
 export default function AdminPage() {
-  const [longUrl, setLongUrl] = useState<string>("");
-  const [customName, setCustomName] = useState<string>("");
-  const [shortUrl, setShortUrl] = useState<string>("");
-  const [copied, setCopied] = useState<boolean>(false);
+  const [longUrl, setLongUrl] = useState("");
+  const [shortUrl, setShortUrl] = useState("");
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const createLink = () => {
-    if (!longUrl) return alert("Masukkan URL tujuan!");
+    setError("");
+    setShortUrl("");
+
+    let destination: URL;
     try {
-      // Membuat link murni di client-side (Tanpa Database)
-      const encoded = btoa(longUrl);
-      const finalUrl = `${window.location.origin}/link?t=${encoded}`;
-      setShortUrl(finalUrl);
-      setCopied(false);
-    } catch (err) {
-      alert("URL tidak valid.");
+      destination = new URL(longUrl.trim());
+    } catch {
+      setError("Masukkan URL tujuan yang valid, termasuk https:// atau http://.");
+      return;
     }
+
+    if (destination.protocol !== "https:" && destination.protocol !== "http:") {
+      setError("Hanya URL dengan protokol HTTP atau HTTPS yang didukung.");
+      return;
+    }
+
+    const encoded = encodeBase64Url(destination.toString());
+    setShortUrl(`${window.location.origin}/link?t=${encoded}`);
+    setCopied(false);
   };
 
   const handleCopy = async () => {
@@ -29,61 +47,91 @@ export default function AdminPage() {
       } else {
         const textArea = document.createElement("textarea");
         textArea.value = shortUrl;
+        textArea.setAttribute("readonly", "");
+        textArea.style.position = "absolute";
+        textArea.style.left = "-9999px";
         document.body.appendChild(textArea);
         textArea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textArea);
+        const successful = document.execCommand("copy");
+        textArea.remove();
+        if (!successful) throw new Error("Clipboard copy failed");
       }
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      alert("Gagal menyalin otomatis.");
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Gagal menyalin otomatis. Pilih dan salin URL secara manual.");
     }
   };
 
   return (
-    <div className="bg-slate-900 text-white min-h-screen flex items-center justify-center p-4">
-      <div className="max-w-md w-full p-8 bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl">
+    <main className="bg-slate-900 text-white min-h-screen flex items-center justify-center p-4">
+      <section className="max-w-md w-full p-8 bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl">
         <h1 className="text-2xl font-bold mb-6 text-blue-400 text-center uppercase tracking-tighter">
           SHORTLINK GENERATOR
         </h1>
-        <div className="space-y-4">
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            createLink();
+          }}
+        >
+          <label htmlFor="destination" className="block text-sm text-slate-300">
+            URL tujuan
+          </label>
           <input
-            type="text"
+            id="destination"
+            type="url"
+            inputMode="url"
+            autoComplete="url"
+            required
             value={longUrl}
-            onChange={(e) => setLongUrl(e.target.value)}
-            placeholder="https://url.com/..."
+            onChange={(event) => setLongUrl(event.target.value)}
+            placeholder="https://example.com/path"
             className="w-full p-3 rounded bg-slate-900 border border-slate-700 focus:border-blue-500 outline-none"
           />
           <button
-            onClick={createLink}
+            type="submit"
             className="w-full bg-blue-600 p-3 rounded font-bold hover:bg-blue-700 transition"
           >
             GENERATE LINK
           </button>
-        </div>
+        </form>
+
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-red-300">
+            {error}
+          </p>
+        )}
 
         {shortUrl && (
           <div className="mt-6 p-4 bg-slate-950 rounded border border-blue-500/30">
-            <p className="text-xs text-slate-500 mb-3 uppercase font-bold text-center">
-              Shortlink Siap:
+            <p className="text-xs text-slate-400 mb-3 uppercase font-bold text-center">
+              Shortlink siap
             </p>
             <div className="flex flex-col gap-3">
               <input
+                aria-label="URL shortlink"
                 readOnly
                 value={shortUrl}
+                onFocus={(event) => event.currentTarget.select()}
                 className="w-full bg-slate-900 p-2 rounded text-blue-300 font-mono text-xs text-center outline-none"
               />
               <button
+                type="button"
                 onClick={handleCopy}
                 className={`w-full p-2 rounded text-xs font-bold transition uppercase ${copied ? "bg-green-600" : "bg-slate-700"}`}
               >
-                {copied ? "✓ Copied" : "Copy Link"}
+                {copied ? "✓ Tersalin" : "Salin link"}
               </button>
             </div>
           </div>
         )}
-      </div>
-    </div>
+        <p className="mt-6 text-xs leading-relaxed text-slate-400">
+          Shortlink ini menyimpan URL tujuan di dalam parameter tautan; tautan
+          tidak disimpan sebagai entri database.
+        </p>
+      </section>
+    </main>
   );
 }
