@@ -1,10 +1,40 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { normalizeCategories, type CookieCategories } from "@/lib/cookie-consent.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const TELEGRAM_TIMEOUT_MS = 12_000;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const COOKIE_NAME = "shortlink_consent";
+const COOKIE_SECRET = process.env.COOKIE_CONSENT_SECRET || process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+
+type StoredConsent = { version: 1; updatedAt: string; categories: CookieCategories };
+
+function readCookieConsent(request: Request): StoredConsent | null {
+  const rawCookie = request.headers.get("cookie")?.split(";").map((part) => part.trim())
+    .find((part) => part.startsWith(`${COOKIE_NAME}=`))?.slice(COOKIE_NAME.length + 1);
+  if (!rawCookie || !COOKIE_SECRET) return null;
+  const separator = rawCookie.lastIndexOf(".");
+  if (separator <= 0) return null;
+  const payload = rawCookie.slice(0, separator);
+  const signature = rawCookie.slice(separator + 1);
+  const expected = createHmac("sha256", COOKIE_SECRET).update(payload).digest("base64url");
+  const expectedBytes = Buffer.from(expected);
+  const receivedBytes = Buffer.from(signature);
+  if (expectedBytes.length !== receivedBytes.length || !timingSafeEqual(expectedBytes, receivedBytes)) return null;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (!parsed || typeof parsed !== "object") return null;
+    const record = parsed as Partial<StoredConsent>;
+    const categories = normalizeCategories(record.categories);
+    if (record.version !== 1 || typeof record.updatedAt !== "string" || !Number.isFinite(Date.parse(record.updatedAt)) || !categories) return null;
+    return { version: 1, updatedAt: record.updatedAt, categories };
+  } catch {
+    return null;
+  }
+}
 
 type Gps = { lat: number; lon: number; accuracy?: number };
 type ReportBody = {
@@ -101,9 +131,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
+  const cookieConsent = readCookieConsent(req);
   const lines = [
-    "SHORTLINK VISITOR REPORT (consent granted)",
+    "SHORTLINK UNIFIED REPORT (explicit visitor consent granted)",
     `Time (UTC): ${new Date().toISOString()}`,
+    "",
+    "Cookie consent preferences:",
+    ...(cookieConsent ? [
+      `Consent updated (UTC): ${cookieConsent.updatedAt}`,
+      `Necessary: ${cookieConsent.categories.necessary ? "enabled" : "disabled"}`,
+      `Functional: ${cookieConsent.categories.functional ? "accepted" : "rejected"}`,
+      `Analytics: ${cookieConsent.categories.analytics ? "accepted" : "rejected"}`,
+      `Marketing: ${cookieConsent.categories.marketing ? "accepted" : "rejected"}`,
+    ] : ["Preferences: unavailable (no valid signed consent cookie)"]),
+    "",
+    "Visitor report (sent only after separate explicit consent):",
     "",
     "Location:",
     gps
