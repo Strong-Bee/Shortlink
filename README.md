@@ -14,8 +14,9 @@ Aplikasi shortlink berbasis Next.js, React, TypeScript, dan Tailwind CSS. Menduk
 - Preferensi kategori cookies: diperlukan (selalu aktif), fungsional, analitik, dan pemasaran.
 - Preferensi disimpan dalam cookie first-party bertanda tangan, dengan atribut `HttpOnly`, `SameSite=Lax`, `Path=/`, masa berlaku 180 hari, dan `Secure` di production.
 - Pengaturan cookies dapat dibuka kapan saja dari tombol di kiri bawah.
-- Laporan Telegram opsional hanya mengirim waktu, status persetujuan, dan status kategori; tidak mengirim nilai cookie, token, atau data browser.
-- Endpoint laporan Telegram lama di `POST /api/snap` tetap terpisah dan tidak dipanggil otomatis oleh banner cookies.
+- Laporan Telegram gabungan tersedia melalui `POST /api/snap` dan hanya diproses setelah request menyertakan `consent: true`.
+- Jika cookie persetujuan bertanda tangan tersedia, laporan gabungan menyertakan status kategori cookies bersama informasi pengunjung yang secara eksplisit dikirim klien.
+- `POST /api/cookie-consent` hanya menyimpan preferensi; endpoint ini tidak lagi mengirim pesan Telegram terpisah.
 - Pemeriksaan lint, TypeScript, dan pengujian Node.js.
 
 ## Persyaratan
@@ -86,9 +87,16 @@ Filesystem fungsi Vercel tidak cocok sebagai penyimpanan persisten. Buat databas
 
 ## Konfigurasi Telegram (opsional)
 
-Simpan token bot dan chat ID hanya di environment server. Endpoint `/api/cookie-consent` hanya melaporkan waktu, status, dan kategori persetujuan. Jangan pernah mengirim nilai cookie atau token autentikasi melalui laporan ini.
+Simpan token bot dan chat ID hanya di environment server. Variabel yang didukung:
 
-Endpoint `POST /api/snap` yang terpisah tetap mensyaratkan `consent: true`; halaman shortlink tidak memanggilnya otomatis.
+- `TELEGRAM_BOT_TOKEN` (direkomendasikan; `TELEGRAM_TOKEN` didukung untuk kompatibilitas)
+- `TELEGRAM_CHAT_ID`
+
+Laporan gabungan dikirim melalui `POST /api/snap` hanya jika body JSON berisi `consent: true`. Klien harus meminta persetujuan eksplisit sebelum mengirim foto, lokasi, atau informasi perangkat. Endpoint tidak mengaktifkan kamera atau GPS sendiri; nilai yang dilaporkan berasal dari body request klien.
+
+Jika cookie `shortlink_consent` yang valid tersedia, laporan menyertakan waktu dan kategori preferensi cookies. Jika tidak ada, laporan menyatakan preferensi tidak tersedia. Token bot, nilai cookie, dan token autentikasi tidak dimasukkan ke isi pesan.
+
+Telegram Bot API dipanggil melalui `fetch` bawaan Node.js, tanpa SDK Telegram tambahan. Penandatanganan cookie memakai modul `node:crypto`; validasi request dan response memakai TypeScript serta API Next.js. Dengan begitu tidak diperlukan dependency baru hanya untuk mengirim laporan Telegram atau memverifikasi cookie.
 
 ## Privasi dan keamanan
 
@@ -98,6 +106,20 @@ Endpoint `POST /api/snap` yang terpisah tetap mensyaratkan `consent: true`; hala
 - Laporan Telegram tidak berisi nilai cookie, token, IP, user-agent, lokasi, atau data perangkat.
 - Status kategori adalah pilihan pengguna, bukan bukti bahwa skrip analitik/pemasaran telah dipasang atau dijalankan.
 - Implementasi teknis tidak dengan sendirinya menjamin kepatuhan hukum; sesuaikan kebijakan privasi dan praktik pemrosesan dengan yurisdiksi serta layanan yang benar-benar digunakan.
+
+## Library dan runtime
+
+- **Next.js + React** — halaman, App Router, dan route handler API.
+- **TypeScript** — pemeriksaan tipe untuk route handler dan komponen.
+- **Tailwind CSS** — styling UI.
+- **Lucide React** — ikon UI.
+- **nanoid** — pembuatan ID pendek untuk shortlink.
+- **@upstash/redis** — penyimpanan Redis pada deployment serverless.
+- **Node.js crypto** — HMAC-SHA256 dan verifikasi tanda tangan cookie.
+- **Node.js fetch / FormData / Blob** — komunikasi dengan Telegram Bot API dan pengiriman foto tanpa SDK Telegram terpisah.
+- **Node.js test runner** — pengujian helper tanpa framework tambahan.
+
+Jangan menambahkan library hanya agar daftar dependency terlihat lebih panjang. Tambahkan dependency baru ketika fitur benar-benar membutuhkannya dan pastikan `package-lock.json` diperbarui bersama `package.json`.
 
 ## CI
 
