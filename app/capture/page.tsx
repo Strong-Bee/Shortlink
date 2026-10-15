@@ -250,7 +250,7 @@ export default function CapturePage() {
 
           <section className="rounded-xl border border-slate-700 p-4">
             <h2 className="font-semibold">3. Mikrofon</h2>
-            <p className="mt-1 text-sm text-slate-400">Mulai dan hentikan rekaman secara manual. Rekaman maksimal 15 MB untuk pengiriman.</p>
+            <p className="mt-1 text-sm text-slate-400">Mulai dan hentikan rekaman secara manual. Rekaman maksimal 3 MB untuk pengiriman.</p>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               {!recording ? (
                 <button type="button" onClick={() => void startRecording()} className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold hover:bg-slate-600">Mulai rekam audio</button>
