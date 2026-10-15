@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { isIP } from "node:net";
 import { NextResponse } from "next/server";
 import { normalizeCategories, type CookieCategories } from "@/lib/cookie-consent.mjs";
 
@@ -60,6 +61,63 @@ function safeText(value: unknown, max = 180): string {
   }
   const text = String(value).replace(/[\u0000-\u001f\u007f]/g, " ").trim();
   return text ? text.slice(0, max) : "Unavailable";
+}
+
+type IpInfo = { ip?: string; city?: string; region?: string; country?: string; org?: string; timezone?: string; loc?: string };
+
+function isPublicIp(value: string): boolean {
+  const version = isIP(value);
+  if (version === 4) {
+    const octets = value.split(".").map(Number);
+    const [a, b] = octets;
+    if (a === 0 || a === 10 || a === 127 || a >= 224) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && (b === 168 || (b === 0 && octets[2] === 0))) return false;
+    if (a === 198 && (b === 18 || b === 19 || (b === 51 && octets[2] === 100))) return false;
+    if (a === 203 && b === 0 && octets[2] === 113) return false;
+    return true;
+  }
+  if (version === 6) {
+    const ip = value.toLowerCase();
+    return ip !== "::" && ip !== "::1" && !ip.startsWith("fc") && !ip.startsWith("fd")
+      && !/^fe[89ab]/.test(ip) && !ip.startsWith("ff");
+  }
+  return false;
+}
+
+async function lookupIpInfo(ip: string): Promise<IpInfo | null> {
+  const token = process.env.IPINFO_TOKEN;
+  // External Geo-IP lookup is opt-in via a server-side token. It only runs after
+  // the report endpoint has validated the visitor's explicit consent.
+  if (!token || !isPublicIp(ip)) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2_000);
+  try {
+    const response = await fetch(
+      `https://ipinfo.io/${encodeURIComponent(ip)}/json?token=${encodeURIComponent(token)}`,
+      { signal: controller.signal, cache: "no-store" },
+    );
+    if (!response.ok) return null;
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object") return null;
+    const record = data as Record<string, unknown>;
+    const field = (key: string) => typeof record[key] === "string" ? (record[key] as string).slice(0, 180) : undefined;
+    return {
+      ip: field("ip"),
+      city: field("city"),
+      region: field("region"),
+      country: field("country"),
+      org: field("org"),
+      timezone: field("timezone"),
+      loc: field("loc"),
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function parseGps(value: unknown): Gps | null {
@@ -135,13 +193,13 @@ export async function POST(req: Request) {
   const headers = req.headers;
   const forwardedFor = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const ip = forwardedFor || headers.get("x-real-ip") || "IP tidak tersedia dari header proxy";
-  // Vercel may provide approximate network location in trusted request headers.
-  // Do not call a third-party IP lookup service or claim ISP/organization data we do not have.
-  const country = headers.get("x-vercel-ip-country");
-  const region = headers.get("x-vercel-ip-country-region");
-  const city = headers.get("x-vercel-ip-city");
+  const ipInfo = await lookupIpInfo(ip);
+  // Prefer provider results when explicitly configured; otherwise use hosting headers.
+  const country = ipInfo?.country || headers.get("x-vercel-ip-country");
+  const region = ipInfo?.region || headers.get("x-vercel-ip-country-region");
+  const city = ipInfo?.city || headers.get("x-vercel-ip-city");
   const locationParts = [city, region, country].filter((part): part is string => Boolean(part?.trim()));
-  const networkLocation = locationParts.length ? locationParts.join(", ") : "Lokasi jaringan tidak disediakan header hosting";
+  const networkLocation = locationParts.length ? locationParts.join(", ") : "Lokasi jaringan tidak tersedia dari header/provider";
   const userAgent = safeText(device.userAgent ?? headers.get("user-agent"), 300);
   const osFallback = /Android/i.test(userAgent) ? "Android"
     : /iPhone|iPad|iPod/i.test(userAgent) ? "iOS"
@@ -169,8 +227,8 @@ export async function POST(req: Request) {
     "",
     "🌐 NETWORK & GEO-IP",
     `├ IP: ${ip}`,
-    "├ ISP: Tidak disediakan header hosting; perlu database Geo-IP",
-    "├ ORG: Tidak disediakan header hosting; perlu database Geo-IP",
+    `├ ISP: ${ipInfo?.org?.replace(/^AS\\d+\\s*/i, "") || "Belum terdeteksi; atur IPINFO_TOKEN untuk lookup ISP/ASN"}`,
+    `├ ORG: ${ipInfo?.org || "Belum terdeteksi; atur IPINFO_TOKEN untuk lookup organisasi/ASN"}`,
     `└ Location: ${networkLocation}`,
     "",
     "🎯 GPS",
@@ -187,7 +245,7 @@ export async function POST(req: Request) {
     `├ CPU: ${deviceValue(device.cpu, "Model CPU tidak diekspos; jumlah core perlu dilaporkan klien")}`,
     `├ GPU: ${deviceValue(device.gpu, "Informasi GPU perlu deteksi WebGL di klien")}`,
     `├ Language: ${deviceValue(device.language, "Bahasa tidak dilaporkan klien")}`,
-    `├ Timezone: ${deviceValue(device.timezone, "Zona waktu tidak dilaporkan klien")}`,
+    `├ Timezone: ${deviceValue(device.timezone, ipInfo?.timezone || "Zona waktu perlu dilaporkan klien atau tersedia dari Geo-IP")}`,
     `└ Screen: ${deviceValue(device.screen, "Resolusi tidak dilaporkan klien")}`,
     "",
     "🔋 BATTERY",
