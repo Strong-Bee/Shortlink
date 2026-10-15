@@ -1,28 +1,21 @@
 # Shortlink
 
-Generator shortlink ringan berbasis Next.js dan TypeScript. Aplikasi membuat tautan dengan menyandikan URL tujuan ke dalam parameter URL, sehingga **tidak memerlukan database** untuk pembuatan tautan dasar.
+Aplikasi shortlink berbasis Next.js, React, TypeScript, dan Tailwind CSS. Mendukung tautan berbasis token URL serta sublink bernama dengan masa berlaku tujuh hari.
 
 ## Fitur
 
-- Membuat tautan tujuan dengan parameter `/link?t=...`.
-- Validasi URL tujuan: hanya protokol `http:` dan `https:` yang diterima.
-- Encoding Base64 URL-safe dan dukungan URL Unicode.
-- Tombol salin tautan dengan fallback untuk browser yang tidak mendukung Clipboard API.
-- Halaman pengalihan kompatibel dengan token Base64 standar lama.
-- Endpoint laporan Telegram pada `/api/snap` (opsional; membutuhkan konfigurasi server dan persetujuan eksplisit).
-- Sublink bernama disimpan sebagai JSON dan otomatis kedaluwarsa setelah 7 hari.
-
-## Teknologi
-
-- Next.js 16
-- React 19
-- TypeScript
-- Tailwind CSS 4
-- Axios untuk integrasi lama; endpoint Telegram memakai fetch bawaan Node.js
+- Membuat tautan dari URL tujuan HTTP/HTTPS.
+- Sublink bernama melalui `POST /api/shortlinks`.
+- Masa berlaku tujuh hari (168 jam).
+- Penyimpanan lokal JSON untuk pengembangan mandiri.
+- Penyimpanan Upstash Redis dengan TTL tujuh hari untuk deployment serverless Vercel.
+- Halaman konfirmasi tujuan eksternal; halaman redirect tidak mengakses kamera/lokasi atau mengirim data perangkat.
+- Endpoint laporan Telegram opsional di `POST /api/snap`, yang menolak request tanpa `consent: true`.
+- Pemeriksaan lint, TypeScript, dan pengujian Node.js.
 
 ## Persyaratan
 
-- Node.js yang kompatibel dengan versi Next.js yang digunakan.
+- Node.js 20.9 atau lebih baru.
 - npm.
 
 ## Instalasi lokal
@@ -39,39 +32,34 @@ Buka [http://localhost:3000](http://localhost:3000).
 ## Perintah
 
 ```bash
-npm run dev       # Server pengembangan
-npm run build     # Build produksi
-npm run start     # Menjalankan build produksi
-npm run lint      # Pemeriksaan ESLint
+npm run dev        # Server pengembangan
+npm run lint       # ESLint
+npm run typecheck  # Pemeriksaan TypeScript
+npm test           # Tes token shortlink
+npm run build      # Build produksi
+npm start          # Jalankan build produksi
 ```
 
-## Konfigurasi Telegram (opsional)
+## Penyimpanan sublink dan retensi tujuh hari
 
-Buat file `.env.local` di root proyek:
+Sublink dibuat dengan `POST /api/shortlinks` dan dicari dengan `GET /api/shortlinks?slug=nama`. Setiap record mempunyai `createdAt` dan respons pembuatan menyertakan `expiresAt`. Tautan kedaluwarsa mengembalikan HTTP 404.
+
+### Lokal: JSON
+
+Saat berjalan lokal dan variabel Upstash tidak diatur, record disimpan dalam `data/shortlinks.json`. Record kedaluwarsa dibersihkan saat endpoint membaca atau menulis data. Karena itu, pembersihan terjadi pada request berikutnya, bukan melalui daemon latar belakang.
+
+### Vercel: Upstash Redis (wajib)
+
+Filesystem fungsi Vercel tidak cocok sebagai penyimpanan persisten. Untuk deployment Vercel, buat database Redis di Upstash dan tambahkan environment variables berikut pada Vercel Project Settings → Environment Variables:
 
 ```env
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_CHAT_ID=
+UPSTASH_REDIS_REST_URL=https://your-database.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_upstash_rest_token
 ```
 
-Jangan commit token atau rahasia ke repository. Jika variabel Telegram tidak diatur, endpoint laporan akan mengembalikan error konfigurasi.
+Setelah variabel diatur, lakukan redeploy. Setiap sublink disimpan dengan TTL Redis selama 604800 detik (7 hari), sehingga record kedaluwarsa dihapus oleh Redis. Jika deployment berjalan di Vercel tanpa konfigurasi Redis, API akan mengembalikan HTTP 503 alih-alih menulis ke filesystem yang tidak persisten.
 
-## Privasi dan keamanan
-
-- Gunakan fitur lokasi atau kamera hanya dengan pemberitahuan yang jelas dan persetujuan sadar dari pengunjung.
-- Browser tetap mengendalikan izin lokasi dan kamera; izin yang sudah diberikan sebelumnya mungkin tetap berlaku sesuai perilaku browser.
-- Jangan gunakan endpoint pelaporan untuk mengumpulkan atau mengirimkan data pribadi tanpa dasar yang sah dan persetujuan yang sesuai.
-- Pastikan deployment menggunakan HTTPS untuk API browser yang memerlukan secure context.
-- Batasi akses ke bot Telegram dan simpan kredensial hanya sebagai environment variables server.
-- Geo-IP adalah perkiraan lokasi jaringan, bukan koordinat GPS.
-
-## Penyimpanan sublink menggunakan JSON
-
-Sublink bernama dibuat melalui `POST /api/shortlinks` dan disimpan sebagai array JSON di `data/shortlinks.json`. Endpoint `GET /api/shortlinks?slug=nama` mencari tujuan dari file tersebut. Rute publik menggunakan format `/link/nama`.
-
-Setiap record memiliki `createdAt`. Record dihapus otomatis ketika sudah berumur **7 hari (168 jam)**. Pembersihan berjalan saat endpoint shortlink membaca atau menulis data: record kedaluwarsa dibuang dari file JSON, dan tautan kedaluwarsa mengembalikan HTTP 404. Respons pembuatan menyertakan `createdAt` dan `expiresAt`.
-
-Contoh record:
+Contoh record lokal:
 
 ```json
 [
@@ -83,16 +71,32 @@ Contoh record:
 ]
 ```
 
-### Catatan deployment
+## Konfigurasi Telegram (opsional)
 
-- Jalankan pada server Node.js yang memiliki akses tulis ke direktori proyek dan penyimpanan persisten.
-- Pembersihan dilakukan saat API dipanggil, bukan oleh proses latar belakang yang berjalan setiap detik. Jika perlu penghapusan tepat waktu saat aplikasi tidak menerima request, siapkan cron job pada server yang memiliki disk persisten.
-- File JSON adalah penyimpanan sederhana, bukan database transaksional. Untuk traffic serentak tinggi, penulisan paralel perlu antrean/lock agar perubahan tidak saling menimpa.
-- Hosting serverless seperti Vercel biasanya memiliki filesystem runtime sementara atau read-only. File JSON lokal tidak dijamin bertahan setelah redeploy/restart dan tidak otomatis dibagikan ke beberapa instance. Untuk model JSON tanpa database, gunakan VPS/self-hosted Node.js dengan disk persisten dan backup rutin.
-- Pastikan file JSON tidak menyimpan data pribadi atau kredensial. Jangan mengubah file ini melalui GitHub API saat aplikasi sedang aktif karena dapat menimpa data runtime.
+Atur environment variables server:
 
-## Lisensi
+```env
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+```
 
-Lihat file lisensi repository jika tersedia.
+`TELEGRAM_TOKEN` tetap didukung sebagai nama token lama. Jangan commit token atau kredensial ke repository. Endpoint `/api/snap` memerlukan JSON yang menyertakan `"consent": true`; tanpa persetujuan eksplisit, API mengembalikan HTTP 403. Endpoint tidak dipanggil otomatis oleh halaman shortlink.
+
+## Privasi dan keamanan
+
+- Halaman tautan meminta pengguna memeriksa tujuan sebelum melanjutkan.
+- Halaman tautan tidak meminta atau mengakses kamera dan lokasi, dan tidak mengirim telemetry.
+- Gunakan laporan Telegram hanya untuk data yang diberikan secara sadar dan dengan persetujuan yang sah.
+- Browser tetap mengendalikan izin kamera dan lokasi.
+- Simpan token Telegram dan Redis hanya sebagai environment variables.
+- Jangan menyimpan informasi pribadi yang tidak diperlukan.
+
+## CI
+
+GitHub Actions menjalankan lint, pemeriksaan TypeScript, tes Node.js, dan build produksi pada push ke `main` serta pull request. Status build aktual dapat dilihat di tab **Actions** setelah workflow berjalan.
+
+## Catatan
+
+File JSON hanya ditujukan untuk pengembangan lokal. Di Vercel, gunakan Redis persisten seperti yang dijelaskan di atas. Lisensi mengikuti file lisensi repository jika tersedia.
 
 Dikembangkan oleh Strong-Bee.
