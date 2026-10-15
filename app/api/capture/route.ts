@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
-const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
+const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
 const TIMEOUT_MS = 15_000;
 
 function safeText(value: FormDataEntryValue | null, max = 300): string {
@@ -63,10 +63,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Tidak ada data untuk dikirim." }, { status: 400 });
   }
   if (photoFile && (!photoFile.type.startsWith("image/") || photoFile.size > MAX_PHOTO_BYTES)) {
-    return NextResponse.json({ error: "Foto harus berupa gambar dan maksimal 5 MB." }, { status: 400 });
+    return NextResponse.json({ error: "Foto harus berupa gambar dan maksimal 3 MB." }, { status: 400 });
   }
   if (audioFile && (!audioFile.type.startsWith("audio/") || audioFile.size > MAX_AUDIO_BYTES)) {
-    return NextResponse.json({ error: "Audio harus berupa file audio dan maksimal 15 MB." }, { status: 400 });
+    return NextResponse.json({ error: "Audio harus berupa file audio dan maksimal 3 MB." }, { status: 400 });
   }
 
   const controller = new AbortController();
