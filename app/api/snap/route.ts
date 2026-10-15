@@ -213,7 +213,7 @@ export async function POST(req: Request) {
     "━━━━━━━━━━━━━━━━━━━━",
     "Sent only after explicit consent.",
   ];
-  const caption = lines.join("\\n").slice(0, 1024);
+  const caption = lines.join("\n").slice(0, 1024);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TELEGRAM_TIMEOUT_MS);
