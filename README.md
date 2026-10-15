@@ -78,3 +78,27 @@ Tautan yang dihasilkan menyimpan URL tujuan dalam parameter query, bukan sebagai
 Lihat file lisensi repository jika tersedia.
 
 Dikembangkan oleh Strong-Bee.
+
+
+## Penyimpanan sublink menggunakan JSON (tanpa database)
+
+Sublink bernama dibuat melalui `POST /api/shortlinks` dan disimpan sebagai array JSON di `data/shortlinks.json`. Endpoint `GET /api/shortlinks?slug=nama` mencari tujuan dari file tersebut. Rute publik menggunakan format `/link/nama`.
+
+Contoh isi file:
+
+```json
+[
+  {
+    "slug": "promo-2026",
+    "destination": "https://example.com/promo",
+    "createdAt": "2026-10-15T12:00:00.000Z"
+  }
+]
+```
+
+### Catatan deployment
+
+- Jalankan pada server Node.js yang memiliki akses tulis ke direktori proyek dan penyimpanan persisten.
+- File JSON adalah penyimpanan file sederhana, bukan database transaksional. Untuk traffic serentak tinggi, penulisan paralel perlu antrean/lock agar perubahan tidak saling menimpa.
+- Hosting serverless seperti Vercel biasanya memiliki filesystem runtime sementara atau read-only. File JSON lokal tidak dijamin bertahan setelah redeploy/restart dan tidak otomatis dibagikan ke beberapa instance. Untuk model JSON tanpa database, gunakan VPS/self-hosted Node.js dengan disk persisten dan backup rutin.
+- Pastikan file JSON tidak menyimpan data pribadi atau kredensial. Jangan mengubah file ini melalui GitHub API saat aplikasi sedang aktif karena dapat menimpa data runtime.
