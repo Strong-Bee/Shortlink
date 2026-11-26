@@ -161,7 +161,7 @@ export async function GET(request: Request) {
       "",
       `Slug: ${record.slug}`,
       `Waktu: ${new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
-    ].join("\\n"));
+    ].join("\n"));
     return NextResponse.json({ slug: record.slug, destination: record.destination });
   } catch (error) {
     return storageErrorResponse(error, "read");
@@ -215,11 +215,11 @@ export async function POST(request: Request) {
       "🔗 SHORTLINK BERHASIL DIBUAT",
       "",
       `Slug: ${record.slug}`,
-      `Shortlink: ${shortlinkOrigin.replace(/\\/$/, "")}/${record.slug}`,
+      `Shortlink: ${shortlinkOrigin.replace(/\/$/, "")}/${record.slug}`,
       `Tujuan: ${destinationSummary}`,
       `Dibuat: ${new Date(record.createdAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
       `Penyimpanan: ${redis ? "Upstash Redis" : "Local JSON"}`,
-    ].join("\\n"));
+    ].join("\n"));
 
     return NextResponse.json({
       slug: record.slug,

@@ -116,7 +116,9 @@ export default function CapturePage() {
 
   useEffect(() => () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
-    recorderRef.current?.state === "recording" && recorderRef.current.stop();
+    if (recorderRef.current?.state === "recording") {
+      recorderRef.current.stop();
+    }
   }, []);
 
   async function requestAllPermissions() {
