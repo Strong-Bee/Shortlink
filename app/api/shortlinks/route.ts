@@ -156,12 +156,25 @@ export async function GET(request: Request) {
     }
     const reportConsent = new URL(request.url).searchParams.get("report") === "1";
     const now = new Date();
-    const lines = [
-      reportConsent ? "👁️ LAPORAN KUNJUNGAN SHORTLINK" : "👁️ SHORTLINK DIKUNJUNGI",
-      "",
-      `Slug: ${record.slug}`,
-      `Waktu: ${now.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
-    ];
+    const timestamp = now.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" });
+    const lines = reportConsent
+      ? [
+          "👁️  LAPORAN KUNJUNGAN SHORTLINK",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
+          "",
+          "🔗  INFORMASI KUNJUNGAN",
+          `Slug              : ${record.slug}`,
+          `Waktu             : ${timestamp} WIB`,
+        ]
+      : [
+          "🔔  NOTIFIKASI KUNJUNGAN SHORTLINK",
+          "━━━━━━━━━━━━━━━━━━━━━━━━",
+          "",
+          `Slug              : ${record.slug}`,
+          `Waktu             : ${timestamp} WIB`,
+          "",
+          "ℹ️ Pengunjung memilih melanjutkan tanpa laporan tambahan.",
+        ];
 
     if (reportConsent) {
       const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "";
@@ -190,14 +203,24 @@ export async function GET(request: Request) {
           clearTimeout(timeout);
         }
       }
+
       const locationParts = (geo.loc || "").split(",");
       const latitude = Number(locationParts[0]);
       const longitude = Number(locationParts[1]);
-      const hasCoordinates = locationParts.length === 2 && Number.isFinite(latitude) && Number.isFinite(longitude) && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+      const hasCoordinates = locationParts.length === 2 && Number.isFinite(latitude) && Number.isFinite(longitude)
+        && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
       const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin).replace(/\/$/, "");
-      const mapUrl = hasCoordinates ? appOrigin + "/map?lat=" + encodeURIComponent(String(latitude)) + "&lon=" + encodeURIComponent(String(longitude)) + "&label=" + encodeURIComponent([geo.city, geo.region, geo.country].filter(Boolean).join(", ") || "Perkiraan lokasi pengunjung") : null;
-      const osmUrl = hasCoordinates ? "https://www.openstreetmap.org/?mlat=" + latitude + "&mlon=" + longitude + "#map=14/" + latitude + "/" + longitude : null;
-      const googleMapsUrl = hasCoordinates ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(`${latitude},${longitude}`) : null;
+      const locationLabel = [geo.city, geo.region, geo.country].filter(Boolean).join(", ") || "Perkiraan lokasi pengunjung";
+      const mapUrl = hasCoordinates
+        ? appOrigin + "/map?lat=" + encodeURIComponent(String(latitude)) + "&lon=" + encodeURIComponent(String(longitude)) + "&label=" + encodeURIComponent(locationLabel)
+        : null;
+      const osmUrl = hasCoordinates
+        ? "https://www.openstreetmap.org/?mlat=" + latitude + "&mlon=" + longitude + "#map=14/" + latitude + "/" + longitude
+        : null;
+      const googleMapsUrl = hasCoordinates
+        ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(`${latitude},${longitude}`)
+        : null;
+
       const ua = request.headers.get("user-agent") || "Tidak tersedia";
       const language = request.headers.get("accept-language") || "Tidak tersedia";
       const clientHints = request.headers.get("sec-ch-ua") || "Tidak tersedia";
@@ -209,33 +232,45 @@ export async function GET(request: Request) {
       const os = /Android/i.test(ua) ? "Android" : /iPhone|iPad|iPod/i.test(ua) ? "iOS"
         : /Windows/i.test(ua) ? "Windows" : /Mac OS|Macintosh/i.test(ua) ? "macOS"
         : /Linux/i.test(ua) ? "Linux" : "Tidak teridentifikasi";
+
       lines.push(
         "",
-        "— JARINGAN & LOKASI PERKIRAAN —",
-        `IP publik: ${ip || "Tidak tersedia"}`,
-        `Kota: ${geo.city || "Tidak tersedia"}`,
-        `Wilayah: ${geo.region || "Tidak tersedia"}`,
-        `Negara: ${geo.country || "Tidak tersedia"}`,
-        `ISP/Organisasi: ${geo.org || "Tidak tersedia"}`,
-        `Zona waktu IP: ${geo.timezone || "Tidak tersedia"}`,
-        `Koordinat perkiraan: ${hasCoordinates ? `${latitude}, ${longitude}` : "Tidak tersedia dari penyedia geolokasi"}`,
-        ...(mapUrl ? [`Peta interaktif (Leaflet + OpenStreetMap): ${mapUrl}`, `Buka di Google Maps: ${googleMapsUrl}`, `Buka langsung di OpenStreetMap: ${osmUrl}`] : ["Peta: koordinat tidak tersedia; tambahkan IPINFO_TOKEN agar penyedia dapat memberikan perkiraan koordinat."]),
+        "━━━━━━━━━━━━━━━━━━━━━━━━",
+        "📍  JARINGAN & LOKASI PERKIRAAN",
+        `IP publik          : ${ip || "Tidak tersedia"}`,
+        `Kota               : ${geo.city || "Tidak tersedia"}`,
+        `Wilayah            : ${geo.region || "Tidak tersedia"}`,
+        `Negara             : ${geo.country || "Tidak tersedia"}`,
+        `ISP/Organisasi     : ${geo.org || "Tidak tersedia"}`,
+        `Zona waktu         : ${geo.timezone || "Tidak tersedia"}`,
+        `Koordinat          : ${hasCoordinates ? `${latitude}, ${longitude}` : "Tidak tersedia"}`,
         "",
-        "— PERANGKAT & BROWSER —",
-        `Jenis perangkat: ${device}`,
-        `Browser (perkiraan UA): ${browser}`,
-        `OS (perkiraan UA): ${os}`,
-        `Client hints browser: ${clientHints}`,
-        `Platform client hints: ${platform}`,
-        `Mobile client hint: ${mobile}`,
-        `User-Agent: ${ua.slice(0, 500)}`,
-        `Bahasa browser: ${language.slice(0, 200)}`,
+        "🗺️  TAUTAN PETA",
+        ...(hasCoordinates
+          ? [
+              `Google Maps        : ${googleMapsUrl}`,
+              `OpenStreetMap      : ${osmUrl}`,
+              `Peta interaktif    : ${mapUrl}`,
+            ]
+          : ["Koordinat peta tidak tersedia.", "Periksa konfigurasi IPINFO_TOKEN pada environment aplikasi."]),
         "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━",
+        "💻  PERANGKAT & BROWSER",
+        `Jenis perangkat    : ${device}`,
+        `Browser            : ${browser}`,
+        `Sistem operasi     : ${os}`,
+        `Client hints       : ${clientHints}`,
+        `Platform           : ${platform}`,
+        `Mobile             : ${mobile}`,
+        `Bahasa             : ${language.slice(0, 200)}`,
+        `User-Agent         : ${ua.slice(0, 500)}`,
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━",
+        "🛡️  PRIVASI & PERSETUJUAN",
         "Persetujuan laporan tambahan: diberikan secara eksplisit.",
-        "Lokasi hanya perkiraan dari IP; bukan GPS. Tidak ada kamera, mikrofon, foto, atau audio yang diakses.",
+        "Lokasi merupakan estimasi berbasis IP, bukan GPS.",
+        "Tidak ada kamera, mikrofon, foto, atau audio yang diakses.",
       );
-    } else {
-      lines.push("", "Pengunjung memilih lanjut tanpa laporan tambahan.");
     }
     await sendTelegramNotification(lines.join("\n"));
     return NextResponse.json({ slug: record.slug, destination: record.destination });
@@ -288,13 +323,19 @@ export async function POST(request: Request) {
     const destinationSummary = `${safeDestination.origin}${safeDestination.pathname}`;
     const shortlinkOrigin = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
     const telegramStatus = await sendTelegramNotification([
-      "🔗 SHORTLINK BERHASIL DIBUAT",
+      "✅  SHORTLINK BERHASIL DIBUAT",
+      "━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
-      `Slug: ${record.slug}`,
-      `Shortlink: ${shortlinkOrigin.replace(/\/$/, "")}/${record.slug}`,
-      `Tujuan: ${destinationSummary}`,
-      `Dibuat: ${new Date(record.createdAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
-      `Penyimpanan: ${redis ? "Upstash Redis" : "Local JSON"}`,
+      "🔗  DETAIL SHORTLINK",
+      `Slug              : ${record.slug}`,
+      `URL shortlink     : ${shortlinkOrigin.replace(/\/$/, "")}/${record.slug}`,
+      `URL tujuan        : ${destinationSummary}`,
+      "",
+      "🕒  INFORMASI SISTEM",
+      `Waktu dibuat      : ${new Date(record.createdAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
+      `Penyimpanan       : ${redis ? "Upstash Redis" : "Local JSON"}`,
+      "Masa aktif        : 7 hari",
+      "━━━━━━━━━━━━━━━━━━━━━━━━",
     ].join("\n"));
 
     return NextResponse.json({
