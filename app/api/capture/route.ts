@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 30_000;
 
 function safeText(value: FormDataEntryValue | null, max = 300): string {
   if (typeof value !== "string") return "";
@@ -72,18 +72,21 @@ export async function POST(request: Request) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
+    // Always send the complete report text as its own Telegram message.
+    // Photo captions are limited to 1,024 characters, so they must not carry
+    // the only copy of the report.
+    const reportForm = new FormData();
+    reportForm.set("chat_id", chatId);
+    reportForm.set("text", summary);
+    reportForm.set("disable_web_page_preview", "true");
+    await sendTelegram(token, "sendMessage", reportForm, controller.signal);
+
     if (photoFile) {
       const form = new FormData();
       form.set("chat_id", chatId);
-      form.set("caption", summary.slice(0, 1024));
+      form.set("caption", "📷 Foto pilihan pengguna terlampir pada laporan di atas.");
       form.set("photo", photoFile, "capture.jpg");
       await sendTelegram(token, "sendPhoto", form, controller.signal);
-    } else {
-      const form = new FormData();
-      form.set("chat_id", chatId);
-      form.set("text", summary.slice(0, 4096));
-      form.set("disable_web_page_preview", "true");
-      await sendTelegram(token, "sendMessage", form, controller.signal);
     }
 
     if (audioFile) {
