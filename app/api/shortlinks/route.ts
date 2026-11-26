@@ -181,36 +181,20 @@ export async function GET(request: Request) {
       const realIp = request.headers.get("x-real-ip")?.trim() || "";
       const ip = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(forwarded) || forwarded.includes(":")
         ? forwarded : realIp;
-      let geo: Record<string, string> = {};
-      const token = process.env.IPINFO_TOKEN;
-      if (token && ip) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 2500);
-        try {
-          const response = await fetch(
-            `https://ipinfo.io/${encodeURIComponent(ip)}/json?token=${encodeURIComponent(token)}`,
-            { signal: controller.signal, cache: "no-store" },
-          );
-          if (response.ok) {
-            const data = await response.json() as Record<string, unknown>;
-            for (const key of ["city", "region", "country", "org", "timezone", "loc"]) {
-              if (typeof data[key] === "string") geo[key] = (data[key] as string).slice(0, 120);
-            }
-          }
-        } catch {
-          // Approximate IP geolocation is optional and may be unavailable.
-        } finally {
-          clearTimeout(timeout);
-        }
-      }
-
-      const locationParts = (geo.loc || "").split(",");
-      const latitude = Number(locationParts[0]);
-      const longitude = Number(locationParts[1]);
-      const hasCoordinates = locationParts.length === 2 && Number.isFinite(latitude) && Number.isFinite(longitude)
+      // Browser GPS is provided only after explicit consent and browser permission.
+      // No external geolocation provider or IP-based location lookup is used.
+      const params = new URL(request.url).searchParams;
+      const rawLatitude = params.get("lat");
+      const rawLongitude = params.get("lon");
+      const rawAccuracy = params.get("accuracy");
+      const latitude = rawLatitude === null ? Number.NaN : Number(rawLatitude);
+      const longitude = rawLongitude === null ? Number.NaN : Number(rawLongitude);
+      const accuracy = rawAccuracy === null ? Number.NaN : Number(rawAccuracy);
+      const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude)
         && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+      const hasAccuracy = Number.isFinite(accuracy) && accuracy >= 0 && accuracy <= 100000;
       const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin).replace(/\/$/, "");
-      const locationLabel = [geo.city, geo.region, geo.country].filter(Boolean).join(", ") || "Perkiraan lokasi pengunjung";
+      const locationLabel = "Lokasi GPS dari izin browser";
       const mapUrl = hasCoordinates
         ? appOrigin + "/map?lat=" + encodeURIComponent(String(latitude)) + "&lon=" + encodeURIComponent(String(longitude)) + "&label=" + encodeURIComponent(locationLabel)
         : null;
@@ -238,12 +222,9 @@ export async function GET(request: Request) {
         "━━━━━━━━━━━━━━━━━━━━━━━━",
         "📍  JARINGAN & LOKASI PERKIRAAN",
         `IP publik          : ${ip || "Tidak tersedia"}`,
-        `Kota               : ${geo.city || "Tidak tersedia"}`,
-        `Wilayah            : ${geo.region || "Tidak tersedia"}`,
-        `Negara             : ${geo.country || "Tidak tersedia"}`,
-        `ISP/Organisasi     : ${geo.org || "Tidak tersedia"}`,
-        `Zona waktu         : ${geo.timezone || "Tidak tersedia"}`,
+        `Sumber lokasi      : ${hasCoordinates ? "GPS perangkat (izin browser)" : "Tidak tersedia"}`,
         `Koordinat          : ${hasCoordinates ? `${latitude}, ${longitude}` : "Tidak tersedia"}`,
+        `Akurasi GPS        : ${hasCoordinates && hasAccuracy ? `±${Math.round(accuracy)} meter` : "Tidak tersedia"}`,
         "",
         "🗺️  TAUTAN PETA",
         ...(hasCoordinates
@@ -252,7 +233,7 @@ export async function GET(request: Request) {
               `OpenStreetMap      : ${osmUrl}`,
               `Peta interaktif    : ${mapUrl}`,
             ]
-          : ["Koordinat peta tidak tersedia.", "Periksa konfigurasi IPINFO_TOKEN pada environment aplikasi."]),
+          : ["Koordinat GPS tidak tersedia. Pengunjung belum memberi izin atau perangkat tidak menyediakan lokasi."]),
         "",
         "━━━━━━━━━━━━━━━━━━━━━━━━",
         "💻  PERANGKAT & BROWSER",
@@ -268,7 +249,7 @@ export async function GET(request: Request) {
         "━━━━━━━━━━━━━━━━━━━━━━━━",
         "🛡️  PRIVASI & PERSETUJUAN",
         "Persetujuan laporan tambahan: diberikan secara eksplisit.",
-        "Lokasi merupakan estimasi berbasis IP, bukan GPS.",
+        "Lokasi GPS hanya dikirim setelah persetujuan dan izin lokasi browser.",
         "Tidak ada kamera, mikrofon, foto, atau audio yang diakses.",
       );
     }
