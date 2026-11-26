@@ -197,6 +197,7 @@ export async function GET(request: Request) {
       const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin).replace(/\/$/, "");
       const mapUrl = hasCoordinates ? appOrigin + "/map?lat=" + encodeURIComponent(String(latitude)) + "&lon=" + encodeURIComponent(String(longitude)) + "&label=" + encodeURIComponent([geo.city, geo.region, geo.country].filter(Boolean).join(", ") || "Perkiraan lokasi pengunjung") : null;
       const osmUrl = hasCoordinates ? "https://www.openstreetmap.org/?mlat=" + latitude + "&mlon=" + longitude + "#map=14/" + latitude + "/" + longitude : null;
+      const googleMapsUrl = hasCoordinates ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(`${latitude},${longitude}`) : null;
       const ua = request.headers.get("user-agent") || "Tidak tersedia";
       const language = request.headers.get("accept-language") || "Tidak tersedia";
       const clientHints = request.headers.get("sec-ch-ua") || "Tidak tersedia";
@@ -218,7 +219,7 @@ export async function GET(request: Request) {
         `ISP/Organisasi: ${geo.org || "Tidak tersedia"}`,
         `Zona waktu IP: ${geo.timezone || "Tidak tersedia"}`,
         `Koordinat perkiraan: ${hasCoordinates ? `${latitude}, ${longitude}` : "Tidak tersedia dari penyedia geolokasi"}`,
-        ...(mapUrl ? [`Peta interaktif (Leaflet + OpenStreetMap): ${mapUrl}`, `Buka langsung di OpenStreetMap: ${osmUrl}`] : ["Peta: koordinat tidak tersedia; tambahkan IPINFO_TOKEN agar penyedia dapat memberikan perkiraan koordinat."]),
+        ...(mapUrl ? [`Peta interaktif (Leaflet + OpenStreetMap): ${mapUrl}`, `Buka di Google Maps: ${googleMapsUrl}`, `Buka langsung di OpenStreetMap: ${osmUrl}`] : ["Peta: koordinat tidak tersedia; tambahkan IPINFO_TOKEN agar penyedia dapat memberikan perkiraan koordinat."]),
         "",
         "— PERANGKAT & BROWSER —",
         `Jenis perangkat: ${device}`,
