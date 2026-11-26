@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 type ExtendedNavigator = Navigator & {
@@ -332,7 +333,7 @@ export default function CapturePage() {
         </div>
       )}
       <section className="mx-auto max-w-2xl">
-        <a href="/" className="text-sm text-cyan-300 hover:underline">← Kembali ke Shortlink</a>
+        <Link href="/" className="text-sm text-cyan-300 hover:underline">← Kembali ke Shortlink</Link>
         <header className="mt-5">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">Fitur sukarela</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight">Pusat laporan media</h1>

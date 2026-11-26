@@ -117,11 +117,18 @@ function storageErrorResponse(error: unknown, operation: "read" | "write") {
   // Keep provider details in server logs only. Never return Redis credentials,
   // connection strings, filesystem paths, or raw provider errors to visitors.
   const cause = error instanceof Error ? error : new Error(String(error));
+  const networkCause = cause.cause;
+  const networkError = networkCause && typeof networkCause === "object"
+    ? networkCause as { name?: unknown; code?: unknown; message?: unknown }
+    : null;
   console.error("[shortlinks] Storage operation failed", {
     operation,
     backend: redis ? "upstash-redis" : "local-json",
     errorName: cause.name,
     errorMessage: cause.message.slice(0, 300),
+    causeName: typeof networkError?.name === "string" ? networkError.name : undefined,
+    causeCode: typeof networkError?.code === "string" ? networkError.code : undefined,
+    causeMessage: typeof networkError?.message === "string" ? networkError.message.slice(0, 200) : undefined,
   });
 
   return NextResponse.json(
