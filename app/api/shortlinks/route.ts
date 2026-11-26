@@ -52,10 +52,14 @@ async function readLocalRecords(): Promise<ShortlinkRecord[]> {
 async function writeLocalRecords(records: ShortlinkRecord[]): Promise<void> {
   await fs.mkdir(path.dirname(dataFile), { recursive: true });
   const tempFile = `${dataFile}.${process.pid}.${Date.now()}.tmp`;
-  await fs.writeFile(tempFile, JSON.stringify(records, null, 2) + "\n", "utf8");
-  await fs.rename(tempFile, dataFile);
+  try {
+    await fs.writeFile(tempFile, JSON.stringify(records, null, 2) + "\n", "utf8");
+    await fs.rename(tempFile, dataFile);
+  } catch (error) {
+    await fs.rm(tempFile, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
-
 async function readAndPruneLocalRecords(): Promise<ShortlinkRecord[]> {
   const records = await readLocalRecords();
   const activeRecords = records.filter((record) => !isExpired(record));
@@ -102,15 +106,31 @@ async function createRecord(record: ShortlinkRecord): Promise<boolean> {
   return true;
 }
 
-function storageErrorResponse(error: unknown) {
+function storageErrorResponse(error: unknown, operation: "read" | "write") {
   if (error instanceof Error && error.message === "PERSISTENT_STORAGE_REQUIRED") {
     return NextResponse.json(
-      { error: "Penyimpanan persisten belum dikonfigurasi. Atur UPSTASH_REDIS_REST_URL dan UPSTASH_REDIS_REST_TOKEN di Vercel." },
+      { error: "Penyimpanan persisten belum dikonfigurasi. Atur UPSTASH_REDIS_REST_URL dan UPSTASH_REDIS_REST_TOKEN di Vercel.", code: "PERSISTENT_STORAGE_REQUIRED" },
       { status: 503 },
     );
   }
+
+  // Keep provider details in server logs only. Never return Redis credentials,
+  // connection strings, filesystem paths, or raw provider errors to visitors.
+  const cause = error instanceof Error ? error : new Error(String(error));
+  console.error("[shortlinks] Storage operation failed", {
+    operation,
+    backend: redis ? "upstash-redis" : "local-json",
+    errorName: cause.name,
+    errorMessage: cause.message.slice(0, 300),
+  });
+
   return NextResponse.json(
-    { error: "Penyimpanan gagal. Periksa konfigurasi Redis atau izin tulis file JSON." },
+    {
+      error: redis
+        ? "Penyimpanan Redis gagal. Periksa URL, token, status database Upstash, dan log runtime Vercel."
+        : "Penyimpanan file JSON gagal. Periksa izin tulis direktori data dan log server.",
+      code: "STORAGE_OPERATION_FAILED",
+    },
     { status: 500 },
   );
 }
@@ -128,7 +148,7 @@ export async function GET(request: Request) {
     }
     return NextResponse.json({ slug: record.slug, destination: record.destination });
   } catch (error) {
-    return storageErrorResponse(error);
+    return storageErrorResponse(error, "read");
   }
 }
 
@@ -177,6 +197,6 @@ export async function POST(request: Request) {
       expiresAt: new Date(Date.parse(record.createdAt) + RETENTION_MS).toISOString(),
     }, { status: 201 });
   } catch (error) {
-    return storageErrorResponse(error);
+    return storageErrorResponse(error, "write");
   }
 }
