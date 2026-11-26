@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import {
   ArrowDownRight,
@@ -87,7 +88,7 @@ export default function HomePage() {
       </div>
 
       <header className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between px-5 py-5 sm:px-8 lg:px-12">
-        <a href="/" aria-label="Shortlink beranda" className="group flex items-center gap-3">
+        <Link href="/" aria-label="Shortlink beranda" className="group flex items-center gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.07] shadow-lg shadow-black/20 transition group-hover:border-lime-300/40">
             <Link2 className="h-5 w-5 text-lime-300" strokeWidth={2.4} />
           </span>
@@ -95,7 +96,7 @@ export default function HomePage() {
             <span className="block text-base font-bold tracking-tight">short<span className="text-lime-300">link</span></span>
             <span className="block text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">Simple. Clear. Connected.</span>
           </span>
-        </a>
+        </Link>
         <div className="flex items-center gap-2">
           <a href="/capture" className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-300/20 sm:px-4">
             Pusat laporan sukarela
