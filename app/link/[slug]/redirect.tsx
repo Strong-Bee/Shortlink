@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -71,12 +72,12 @@ export default function LinkRedirect() {
             <p className="mt-2 break-words text-sm text-slate-300" role="alert">
               {error || "Sublink tidak ditemukan."}
             </p>
-            <a
+            <Link
               href="/"
               className="mt-5 inline-flex rounded-lg bg-cyan-400 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-300"
             >
               Kembali ke beranda
-            </a>
+            </Link>
           </>
         )}
       </section>
