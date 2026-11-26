@@ -166,7 +166,7 @@ export async function GET(request: Request) {
     if (reportConsent) {
       const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "";
       const realIp = request.headers.get("x-real-ip")?.trim() || "";
-      const ip = /^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(forwarded) || forwarded.includes(":")
+      const ip = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(forwarded) || forwarded.includes(":")
         ? forwarded : realIp;
       let geo: Record<string, string> = {};
       const token = process.env.IPINFO_TOKEN;
@@ -196,8 +196,8 @@ export async function GET(request: Request) {
       const platform = request.headers.get("sec-ch-ua-platform") || "Tidak tersedia";
       const mobile = request.headers.get("sec-ch-ua-mobile") || "Tidak tersedia";
       const device = /tablet|ipad/i.test(ua) ? "Tablet" : /mobile|android|iphone/i.test(ua) ? "Mobile" : "Desktop/Unknown";
-      const browser = /Edg\\//i.test(ua) ? "Microsoft Edge" : /Firefox\\//i.test(ua) ? "Firefox"
-        : /Chrome\\//i.test(ua) ? "Chrome/Chromium" : /Safari\\//i.test(ua) ? "Safari" : "Tidak teridentifikasi";
+      const browser = /Edg\//i.test(ua) ? "Microsoft Edge" : /Firefox\//i.test(ua) ? "Firefox"
+        : /Chrome\//i.test(ua) ? "Chrome/Chromium" : /Safari\//i.test(ua) ? "Safari" : "Tidak teridentifikasi";
       const os = /Android/i.test(ua) ? "Android" : /iPhone|iPad|iPod/i.test(ua) ? "iOS"
         : /Windows/i.test(ua) ? "Windows" : /Mac OS|Macintosh/i.test(ua) ? "macOS"
         : /Linux/i.test(ua) ? "Linux" : "Tidak teridentifikasi";
@@ -227,7 +227,7 @@ export async function GET(request: Request) {
     } else {
       lines.push("", "Pengunjung memilih lanjut tanpa laporan tambahan.");
     }
-    await sendTelegramNotification(lines.join("\\n"));
+    await sendTelegramNotification(lines.join("\n"));
     return NextResponse.json({ slug: record.slug, destination: record.destination });
   } catch (error) {
     return storageErrorResponse(error, "read");
