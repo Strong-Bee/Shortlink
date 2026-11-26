@@ -215,7 +215,7 @@ export async function POST(request: Request) {
       "🔗 SHORTLINK BERHASIL DIBUAT",
       "",
       `Slug: ${record.slug}`,
-      `Shortlink: ${shortlinkOrigin.replace(/\\/$/, "")}/${record.slug}`,
+      `Shortlink: ${(shortlinkOrigin.endsWith("/") ? shortlinkOrigin.slice(0, -1) : shortlinkOrigin)}/${record.slug}`,
       `Tujuan: ${destinationSummary}`,
       `Dibuat: ${new Date(record.createdAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
       `Penyimpanan: ${redis ? "Upstash Redis" : "Local JSON"}`,
