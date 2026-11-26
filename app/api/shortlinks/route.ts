@@ -154,14 +154,80 @@ export async function GET(request: Request) {
     if (!record || isExpired(record)) {
       return NextResponse.json({ error: "Sublink tidak ditemukan atau sudah kedaluwarsa." }, { status: 404 });
     }
-    // A successful lookup is the redirect flow's visit event. Record only
-    // the shortlink slug and timestamp; do not collect visitor IP, GPS, or UA.
-    await sendTelegramNotification([
-      "👁️ SHORTLINK DIKUNJUNGI",
+    const reportConsent = new URL(request.url).searchParams.get("report") === "1";
+    const now = new Date();
+    const lines = [
+      reportConsent ? "👁️ LAPORAN KUNJUNGAN SHORTLINK" : "👁️ SHORTLINK DIKUNJUNGI",
       "",
       `Slug: ${record.slug}`,
-      `Waktu: ${new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
-    ].join("\n"));
+      `Waktu: ${now.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
+    ];
+
+    if (reportConsent) {
+      const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "";
+      const realIp = request.headers.get("x-real-ip")?.trim() || "";
+      const ip = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(forwarded) || forwarded.includes(":")
+        ? forwarded : realIp;
+      let geo: Record<string, string> = {};
+      const token = process.env.IPINFO_TOKEN;
+      if (token && ip) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2500);
+        try {
+          const response = await fetch(
+            `https://ipinfo.io/${encodeURIComponent(ip)}/json?token=${encodeURIComponent(token)}`,
+            { signal: controller.signal, cache: "no-store" },
+          );
+          if (response.ok) {
+            const data = await response.json() as Record<string, unknown>;
+            for (const key of ["city", "region", "country", "org", "timezone"]) {
+              if (typeof data[key] === "string") geo[key] = (data[key] as string).slice(0, 120);
+            }
+          }
+        } catch {
+          // Approximate IP geolocation is optional and may be unavailable.
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+      const ua = request.headers.get("user-agent") || "Tidak tersedia";
+      const language = request.headers.get("accept-language") || "Tidak tersedia";
+      const clientHints = request.headers.get("sec-ch-ua") || "Tidak tersedia";
+      const platform = request.headers.get("sec-ch-ua-platform") || "Tidak tersedia";
+      const mobile = request.headers.get("sec-ch-ua-mobile") || "Tidak tersedia";
+      const device = /tablet|ipad/i.test(ua) ? "Tablet" : /mobile|android|iphone/i.test(ua) ? "Mobile" : "Desktop/Unknown";
+      const browser = /Edg\//i.test(ua) ? "Microsoft Edge" : /Firefox\//i.test(ua) ? "Firefox"
+        : /Chrome\//i.test(ua) ? "Chrome/Chromium" : /Safari\//i.test(ua) ? "Safari" : "Tidak teridentifikasi";
+      const os = /Android/i.test(ua) ? "Android" : /iPhone|iPad|iPod/i.test(ua) ? "iOS"
+        : /Windows/i.test(ua) ? "Windows" : /Mac OS|Macintosh/i.test(ua) ? "macOS"
+        : /Linux/i.test(ua) ? "Linux" : "Tidak teridentifikasi";
+      lines.push(
+        "",
+        "— JARINGAN & LOKASI PERKIRAAN —",
+        `IP publik: ${ip || "Tidak tersedia"}`,
+        `Kota: ${geo.city || "Tidak tersedia"}`,
+        `Wilayah: ${geo.region || "Tidak tersedia"}`,
+        `Negara: ${geo.country || "Tidak tersedia"}`,
+        `ISP/Organisasi: ${geo.org || "Tidak tersedia"}`,
+        `Zona waktu IP: ${geo.timezone || "Tidak tersedia"}`,
+        "",
+        "— PERANGKAT & BROWSER —",
+        `Jenis perangkat: ${device}`,
+        `Browser (perkiraan UA): ${browser}`,
+        `OS (perkiraan UA): ${os}`,
+        `Client hints browser: ${clientHints}`,
+        `Platform client hints: ${platform}`,
+        `Mobile client hint: ${mobile}`,
+        `User-Agent: ${ua.slice(0, 500)}`,
+        `Bahasa browser: ${language.slice(0, 200)}`,
+        "",
+        "Persetujuan laporan tambahan: diberikan secara eksplisit.",
+        "Lokasi hanya perkiraan dari IP; bukan GPS. Tidak ada kamera, mikrofon, foto, atau audio yang diakses.",
+      );
+    } else {
+      lines.push("", "Pengunjung memilih lanjut tanpa laporan tambahan.");
+    }
+    await sendTelegramNotification(lines.join("\n"));
     return NextResponse.json({ slug: record.slug, destination: record.destination });
   } catch (error) {
     return storageErrorResponse(error, "read");
