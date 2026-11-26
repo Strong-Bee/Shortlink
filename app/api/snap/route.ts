@@ -350,7 +350,7 @@ export async function POST(req: Request) {
       const form = new FormData();
       form.set("chat_id", chatId);
       form.set("text", chunks.length > 1
-        ? `Laporan lengkap Shortlink (${index + 1}/${chunks.length})\\n\\n${chunks[index]}`
+        ? `Laporan lengkap Shortlink (${index + 1}/${chunks.length})\n\n${chunks[index]}`
         : chunks[index]);
       form.set("disable_web_page_preview", "true");
       await sendTelegramRequest(botToken, "sendMessage", form, controller.signal);
