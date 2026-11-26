@@ -154,6 +154,14 @@ export async function GET(request: Request) {
     if (!record || isExpired(record)) {
       return NextResponse.json({ error: "Sublink tidak ditemukan atau sudah kedaluwarsa." }, { status: 404 });
     }
+    // A successful lookup is the redirect flow's visit event. Record only
+    // the shortlink slug and timestamp; do not collect visitor IP, GPS, or UA.
+    await sendTelegramNotification([
+      "👁️ SHORTLINK DIKUNJUNGI",
+      "",
+      `Slug: ${record.slug}`,
+      `Waktu: ${new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
+    ].join("\\n"));
     return NextResponse.json({ slug: record.slug, destination: record.destination });
   } catch (error) {
     return storageErrorResponse(error, "read");
