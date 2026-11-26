@@ -2,6 +2,7 @@ import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { sendTelegramNotification } from "@/lib/telegram-notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -153,6 +154,14 @@ export async function GET(request: Request) {
     if (!record || isExpired(record)) {
       return NextResponse.json({ error: "Sublink tidak ditemukan atau sudah kedaluwarsa." }, { status: 404 });
     }
+    // A successful lookup is the redirect flow's visit event. Record only
+    // the shortlink slug and timestamp; do not collect visitor IP, GPS, or UA.
+    await sendTelegramNotification([
+      "👁️ SHORTLINK DIKUNJUNGI",
+      "",
+      `Slug: ${record.slug}`,
+      `Waktu: ${new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
+    ].join("\\n"));
     return NextResponse.json({ slug: record.slug, destination: record.destination });
   } catch (error) {
     return storageErrorResponse(error, "read");
@@ -197,11 +206,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Nama sublink sudah digunakan. Pilih nama lain." }, { status: 409 });
     }
 
+    // Notify the owner only after persistent storage confirms creation.
+    // Strip query strings and fragments because destination URLs may contain secrets.
+    const safeDestination = new URL(record.destination);
+    const destinationSummary = `${safeDestination.origin}${safeDestination.pathname}`;
+    const shortlinkOrigin = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
+    const telegramStatus = await sendTelegramNotification([
+      "🔗 SHORTLINK BERHASIL DIBUAT",
+      "",
+      `Slug: ${record.slug}`,
+      `Shortlink: ${shortlinkOrigin.replace(/\\/$/, "")}/${record.slug}`,
+      `Tujuan: ${destinationSummary}`,
+      `Dibuat: ${new Date(record.createdAt).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB`,
+      `Penyimpanan: ${redis ? "Upstash Redis" : "Local JSON"}`,
+    ].join("\\n"));
+
     return NextResponse.json({
       slug: record.slug,
       destination: record.destination,
       createdAt: record.createdAt,
       expiresAt: new Date(Date.parse(record.createdAt) + RETENTION_MS).toISOString(),
+      telegramNotification: telegramStatus,
     }, { status: 201 });
   } catch (error) {
     return storageErrorResponse(error, "write");
