@@ -18,7 +18,7 @@ export async function sendTelegramNotification(text: string): Promise<TelegramRe
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const timeout = setTimeout(() => controller.abort(), 4_000);
   try {
     const response = await fetch(`https://api.telegram.org/bot${config.token}/sendMessage`, {
       method: "POST",
