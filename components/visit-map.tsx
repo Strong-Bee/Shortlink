@@ -7,6 +7,7 @@ type LeafletLayer = { addTo(map: LeafletMap): LeafletLayer };
 type LeafletMap = {
   setView(center: [number, number], zoom: number): LeafletMap;
   remove(): void;
+  invalidateSize(): LeafletMap;
 };
 type LeafletMarker = {
   addTo(map: LeafletMap): LeafletMarker;
@@ -71,9 +72,8 @@ export default function VisitMap({ latitude, longitude, label }: VisitMapProps) 
       .openPopup();
 
     const resizeFrame = window.requestAnimationFrame(() => {
-      // Leaflet recalculates its viewport after the responsive container paints.
-      const element = containerRef.current;
-      if (element) element.dispatchEvent(new Event("resize"));
+      // Recalculate the map viewport after the responsive container paints.
+      map.invalidateSize();
     });
 
     return () => {
